@@ -1,66 +1,40 @@
-import type { AsyncFlow, Flow, FlowSubscription } from "@tsip/types";
+import type { Flow, FlowSubscription } from "@tsip/types";
 
-export interface ComputedFlowContext {
-    // функция для синхронного чтения потока
-    readonly get: <T>(flow: Flow<T>) => T;
-    // функция для ожидания загрузки асинхронных значений в потоках
-    readonly getAsync: <T>(flow: AsyncFlow<T>) => Promise<T>;
-    // отменяет вычисление нового значения (поток не будет изменен)
-    readonly skip: () => never;
-    // сигнал для отмены выполнения селектора
-    readonly signal: AbortSignal;
-}
-
-export class ComputedFlowExecution {
-    private abortController: AbortController;
+export abstract class FlowComputationBase<T> {
     private sources: Set<Flow<unknown>>;
     private lastValues: Map<Flow<unknown>, unknown>;
     private subscriptions: FlowSubscription[];
     private finalized: boolean;
+    private value: { current: T } | null;
 
     public constructor() {
-        this.abortController = new AbortController();
         this.sources = new Set();
         this.lastValues = new Map();
         this.subscriptions = [];
         this.finalized = false;
+        this.value = null;
     }
 
-    // отдает контекст для функции-геттера
-    public getContext(): ComputedFlowContext {
-        return {
-            get: (flow) => {
-                this.addSource(flow);
-                const value = flow.getSnapshot();
-                this.lastValues.set(flow, value);
-                return value;
-            },
-            getAsync: (flow) => {
-                this.addSource(flow);
-                const value = flow.getSnapshot();
-                this.lastValues.set(flow, value);
-                return flow.getDataSnapshot();
-            },
-            skip() {
-                // todo: test this
-                throw AbortSignal.abort().reason;
-            },
-            signal: this.abortController.signal,
-        };
+    public setValue(value: T) {
+        this.finalize();
+        this.value = { current: value };
     }
 
-    // сигнализирует о завершении выполнения функции-геттера
-    public finalize() {
-        this.finalized = true;
-        this.abortController.abort();
+    public getValue(): T {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        return this.value!.current;
     }
 
-    private addSource(flow: Flow<unknown>): void {
+    protected addSource(flow: Flow<unknown>): void {
         // если выполнение функции-геттера уже завершилось, то игнорируем все новые источники
         if (this.finalized) {
             return;
         }
         this.sources.add(flow);
+    }
+
+    protected addSourceValue(flow: Flow<unknown>, value: unknown) {
+        this.lastValues.set(flow, value);
     }
 
     // подписывается на все собранные источники
@@ -69,6 +43,11 @@ export class ComputedFlowExecution {
             const subscription = flow.subscribe(handler);
             this.subscriptions.push(subscription);
         }
+    }
+
+    // сигнализирует о завершении выполнения функции-геттера
+    protected finalize() {
+        this.finalized = true;
     }
 
     // подготавливает объект к удалению из памяти, очищая все подписки и ссылки
@@ -90,7 +69,7 @@ export class ComputedFlowExecution {
     private hasSourceChanged(source: Flow<unknown>): boolean {
         const currentValue = source.getSnapshot();
         const lastValue = this.lastValues.get(source);
-        console.log("hasSourceChanged", { currentValue, lastValue });
+        // console.log("hasSourceChanged", { currentValue, lastValue });
         return !Object.is(currentValue, lastValue);
     }
 
