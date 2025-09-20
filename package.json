@@ -1,0 +1,61 @@
+{
+    "name": "@tsip/computed",
+    "version": "0.0.0",
+    "description": "",
+    "keywords": [],
+    "author": "Maksim Zemskov <maxaz74@gmail.com>",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/nodge/tsip-computed/issues"
+    },
+    "homepage": "https://github.com/nodge/tsip-computed",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/nodge/tsip-computed.git"
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "packageManager": "pnpm@10.16.0",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        "import": {
+            "types": "./dist/index.d.mts",
+            "default": "./dist/index.mjs"
+        },
+        "require": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "files": [
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE",
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "lint": "eslint .",
+        "fmt": "prettier --write . --log-level error",
+        "test": "vitest",
+        "typecheck": "tsc --noEmit",
+        "changeset": "changeset add"
+    },
+    "devDependencies": {
+        "@changesets/changelog-github": "0.5.1",
+        "@changesets/cli": "2.29.6",
+        "@eslint/js": "9.35.0",
+        "@types/eslint": "9.6.1",
+        "@tsip/flow": "link:../flow",
+        "@tsip/types": "link:../types",
+        "eslint": "9.35.0",
+        "lefthook": "1.12.3",
+        "prettier": "3.6.2",
+        "tsup": "8.5.0",
+        "typescript": "5.9.2",
+        "typescript-eslint": "8.42.0",
+        "vitest": "3.2.4"
+    }
+}
