@@ -16,18 +16,19 @@ export interface Subscription extends FlowSubscription {
     listener: () => void;
 }
 
-export abstract class ComputedFlowBase<Data> {
-    // ссылка на последний запуск вычисления значения, если он был
-    protected lastComputation: FlowComputationBase<Data> | null;
+export abstract class ComputedFlowBase<T> {
+    // ссылка на последний computation, если он был
+    // этот computation не подписан на источники, а нужен только для кеширования значения
+    protected cachedComputation: FlowComputationBase<T> | null;
 
-    // ссылка последний запуск вычисления значения
+    // ссылка на computation, который подписан на изменение источников
     // сохраняется до тех пор, пока на поток есть подписки, очищается при удалении последней подписки
-    protected activeComputation: FlowComputationBase<Data> | null;
+    protected activeComputation: FlowComputationBase<T> | null;
 
     // есть ли активные подписки на computed поток
     private hasListeners: boolean;
 
-    // изменилось ли значение с момента последнего вызова getSnapshot
+    // нужно ли пересчитать значение потока
     private isDirty: boolean;
 
     /**
@@ -36,7 +37,7 @@ export abstract class ComputedFlowBase<Data> {
     private subscriptions: Set<Subscription>;
 
     public constructor() {
-        this.lastComputation = null;
+        this.cachedComputation = null;
         this.activeComputation = null;
         this.hasListeners = false;
         this.isDirty = true;
@@ -83,7 +84,14 @@ export abstract class ComputedFlowBase<Data> {
 
         if (!this.hasListeners) {
             this.hasListeners = true;
-            this.compute();
+
+            // если ранее не было подписчиков, значит мы не следили за источниками потока
+            // значит нужно запустить вычисление, чтобы определить актуальный список источников, на которые надо подписаться
+            try {
+                this.getSnapshot();
+            } catch {
+                // the error will be delivered via getSnapshot call by flow's consumer
+            }
         }
 
         this.subscriptions.add(subscription);
@@ -110,48 +118,54 @@ export abstract class ComputedFlowBase<Data> {
      * console.log(flow.getSnapshot()); // "updated"
      * ```
      */
-    public getSnapshot(): Data {
+    public getSnapshot(): T {
         // console.log("GET SNAPSHOT", {
-        //     value: this.lastComputation,
+        //     cache: this.cachedComputation,
         //     isDirty: this.isDirty,
         //     hasListeners: this.hasListeners,
         //     activeComputation: Boolean(this.activeComputation),
-        //     hasChanged: this.lastComputation?.sourcesHasBeenChanged(),
         // });
 
-        if (this.lastComputation && !this.isDirty) {
-            // если мы сейчас не следим за списком источников, то значение в кеше могло устареть, поэтому сверяемся с текущими значениями в источниках
-            if (!this.hasListeners) {
-                if (this.lastComputation.sourcesHasBeenChanged()) {
-                    // console.log("COMPUTE");
-                    return this.compute();
+        if (this.cachedComputation) {
+            // кейсы для пересчета:
+            // 1. если мы сейчас не следим за списком источников, то значение в кеше могло устареть, поэтому сверяемся с текущими значениями в источниках (флаг hasListeners)
+            // 2. если источники изменялись с предыдущего запуска (флаг isDirty)
+            if (!this.hasListeners || this.isDirty) {
+                // console.log("FORCE CHECK SOURCES");
+                if (this.cachedComputation.sourcesHasBeenChanged()) {
+                    // console.log("COMPUTE 1");
+                    this.cachedComputation = this.compute();
+                    this.isDirty = false;
                 }
             }
 
             // console.log("CACHED");
-            return this.lastComputation.getValue();
+        } else {
+            // console.log("COMPUTE 2");
+            this.cachedComputation = this.compute();
+            this.isDirty = false;
         }
 
-        // console.log("COMPUTE");
-        return this.compute();
+        return this.cachedComputation.getValue();
     }
 
-    protected abstract compute(): Data;
+    // метод для вычисления значения
+    protected abstract compute(): FlowComputationBase<T>;
 
     // после успешного вычисления значения подписывается на собранные источники и отписывается от прежних источников
-    protected onComputationFinished(computation: FlowComputationBase<Data>) {
+    protected onComputationFinished(computation: FlowComputationBase<T>) {
+        // console.log("COMPUTATION_FINISHED", {
+        //     value: computation.getValue(),
+        //     subs: this.subscriptions.size,
+        // });
+
         if (this.activeComputation) {
             // отписываемся от прежнего списка источников
             this.activeComputation.dispose();
             this.activeComputation = null;
         }
 
-        // console.log("SET_ACTIVE_COMPUTATION", { value: computation.getValue(), subs: this.subscriptions.size });
-        this.lastComputation = computation;
-        this.isDirty = false;
-
         if (this.hasListeners) {
-            // if (this.)
             // подписываемся на новый список источников
             computation.subscribeToSources(() => {
                 // проверяем, что уведомление пришло от актуального списка источников
@@ -164,16 +178,19 @@ export abstract class ComputedFlowBase<Data> {
         }
     }
 
-    private onSourcesChanged() {
+    protected onSourcesChanged() {
         // console.log("ON SOURCES CHANGED", {
-        //     prev: this.lastComputation,
+        //     cache: this.cachedComputation,
         // });
-        this.isDirty = true;
-        this.notify();
+
+        if (!this.isDirty) {
+            this.isDirty = true;
+            this.notify();
+        }
     }
 
     // уведомляет всех подписчиков об изменении значения в потоке
-    private notify(): void {
+    protected notify(): void {
         // console.log("NOTIFY", {
         //     current_value: this.lastComputation?.current,
         //     stack: new Error().stack,

@@ -22,7 +22,11 @@ export class AsyncFlowComputation<T> extends FlowComputation<AsyncFlowState<T>> 
             getAsync: (flow) => {
                 this.addSource(flow);
                 const value = flow.getSnapshot();
-                this.addSourceValue(flow, value); // todo: shallow equal for AsyncState?
+
+                // todo: shallow equal for AsyncState?
+                // todo: сохранять ссылку на промис, а не снапшот?
+                this.addSourceValue(flow, value);
+
                 return flow.asPromise();
             },
             signal: this.abortController.signal,
@@ -30,7 +34,7 @@ export class AsyncFlowComputation<T> extends FlowComputation<AsyncFlowState<T>> 
     }
 
     // сигнализирует о завершении выполнения функции-геттера
-    protected finalize() {
+    public finalize() {
         super.finalize();
         this.abortController.abort();
     }

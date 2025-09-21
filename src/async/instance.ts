@@ -1,6 +1,7 @@
 import type { AsyncFlow, AsyncFlowState, FlowSubscription } from "@tsip/types";
 import { ComputedFlowBase } from "../base/instance";
 import { AsyncFlowComputation, type AsyncFlowComputationContext } from "./computation";
+import type { FlowComputationBase } from "../base/computation";
 
 /**
  * Internal subscription object that extends the public FlowSubscription interface.
@@ -19,11 +20,11 @@ export interface Subscription extends FlowSubscription {
 
 export type AsyncComputedFlowGetter<Data> = (ctx: AsyncFlowComputationContext) => Promise<Data>;
 
-export class AsyncComputedFlow<Data> extends ComputedFlowBase<AsyncFlowState<Data>> implements AsyncFlow<Data> {
-    private getter: AsyncComputedFlowGetter<Data>;
+export class AsyncComputedFlow<T> extends ComputedFlowBase<AsyncFlowState<T>> implements AsyncFlow<T> {
+    private getter: AsyncComputedFlowGetter<T>;
 
-    // cached successfully resolved async value
-    // private asyncValue: ValueRef<Data> | null;
+    // in-progress вычисления
+    private pendingComputations: AsyncFlowComputation<T>[];
 
     /**
      * Cached promise returned from the getDataSnapshot()
@@ -35,9 +36,10 @@ export class AsyncComputedFlow<Data> extends ComputedFlowBase<AsyncFlowState<Dat
      *
      * @param getter
      */
-    public constructor(getter: AsyncComputedFlowGetter<Data>) {
+    public constructor(getter: AsyncComputedFlowGetter<T>) {
         super();
         this.getter = getter;
+        this.pendingComputations = [];
     }
 
     /**
@@ -62,7 +64,7 @@ export class AsyncComputedFlow<Data> extends ComputedFlowBase<AsyncFlowState<Dat
      * asyncFlow.emit({ status: "success", data: "Hello World" });
      * ```
      */
-    public asPromise(): Promise<Data> {
+    public asPromise(): Promise<T> {
         // this.dataPromise ??= new Promise<Data>((resolve, reject) => {
         //     const state = this.getSnapshot();
         //     this.assertAsyncState(state);
@@ -96,51 +98,63 @@ export class AsyncComputedFlow<Data> extends ComputedFlowBase<AsyncFlowState<Dat
         //     });
         // });
         // return this.dataPromise;
-        return Promise.resolve(undefined as Data);
+        return Promise.resolve(undefined as T);
     }
 
-    protected compute(): AsyncFlowState<Data> {
-        const computation = new AsyncFlowComputation<Data>();
+    protected compute() {
+        const computation = new AsyncFlowComputation<T>();
 
-        const state: AsyncFlowState<Data> = {
+        const state: AsyncFlowState<T> = {
             status: "pending",
-            // todo: когда перетирается lastComputation? нужны тесты
-            data: this.lastComputation?.getValue().data,
+            // todo: когда перетирается? нужны тесты
+            data: this.cachedComputation?.getValue().data,
         };
         computation.setValue(state);
+
+        this.onComputationStarted(computation);
 
         const promise = this.getter(computation.getContext());
         promise.then(
             (data) => {
                 // console.log("RESOLVED", { data });
 
-                const state: AsyncFlowState<Data> = {
+                const state: AsyncFlowState<T> = {
                     status: "success",
                     data,
                 };
                 computation.setValue(state);
 
                 this.onComputationFinished(computation);
-                // this.asyncValue = { current: data, execution: computation };
-                // this.setState(state as Data, computation);
-                // this.notify();
             },
             (error: unknown) => {
-                const state: AsyncFlowState<Data> = {
+                const state: AsyncFlowState<T> = {
                     status: "error",
                     error,
-                    data: this.lastComputation?.getValue().data,
+                    data: this.cachedComputation?.getValue().data,
                 };
                 computation.setValue(state);
 
                 this.onComputationFinished(computation);
-                // this.asyncValue = null;
-                // this.setState(state as Data, computation);
-                // this.notify();
             },
         );
 
-        return state;
+        return computation;
+    }
+
+    private onComputationStarted(computation: AsyncFlowComputation<T>) {
+        this.pendingComputations.push(computation);
+    }
+
+    protected onComputationFinished(computation: FlowComputationBase<AsyncFlowState<T>>) {
+        computation.finalize();
+
+        // todo: remove pending computation
+        // todo: resolve computations in order
+
+        super.onComputationFinished(computation);
+
+        // дополнительно уведомляем о завершении асинхронной операции
+        this.notify();
     }
 
     // private onSourcesChanged() {

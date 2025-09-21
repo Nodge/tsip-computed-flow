@@ -14,9 +14,15 @@ export class FlowComputation<T> extends FlowComputationBase<T> {
         return {
             get: (flow) => {
                 this.addSource(flow);
-                const value = flow.getSnapshot();
-                this.addSourceValue(flow, value);
-                return value;
+
+                try {
+                    const value = flow.getSnapshot();
+                    this.setSourceValue(flow, value);
+                    return value;
+                } catch (err) {
+                    this.setSourceError(flow, err);
+                    throw err;
+                }
             },
             skip() {
                 // todo: test this

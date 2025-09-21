@@ -1,11 +1,22 @@
 import type { Flow, FlowSubscription } from "@tsip/types";
 
+type SourceCachedValue =
+    | {
+          type: "success";
+          value: unknown;
+      }
+    | {
+          type: "error";
+          error: unknown;
+      };
+
 export abstract class FlowComputationBase<T> {
     private sources: Set<Flow<unknown>>;
-    private lastValues: Map<Flow<unknown>, unknown>;
+    private lastValues: Map<Flow<unknown>, SourceCachedValue>;
     private subscriptions: FlowSubscription[];
     private finalized: boolean;
     private value: { current: T } | null;
+    private error: unknown;
 
     public constructor() {
         this.sources = new Set();
@@ -16,11 +27,21 @@ export abstract class FlowComputationBase<T> {
     }
 
     public setValue(value: T) {
-        this.finalize();
         this.value = { current: value };
+        this.error = null;
+    }
+
+    public setError(error: unknown) {
+        this.value = null;
+        this.error = error;
     }
 
     public getValue(): T {
+        if (this.error) {
+            // eslint-disable-next-line @typescript-eslint/only-throw-error
+            throw this.error;
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return this.value!.current;
     }
@@ -33,8 +54,12 @@ export abstract class FlowComputationBase<T> {
         this.sources.add(flow);
     }
 
-    protected addSourceValue(flow: Flow<unknown>, value: unknown) {
-        this.lastValues.set(flow, value);
+    protected setSourceValue(flow: Flow<unknown>, value: unknown) {
+        this.lastValues.set(flow, { type: "success", value });
+    }
+
+    protected setSourceError(flow: Flow<unknown>, error: unknown) {
+        this.lastValues.set(flow, { type: "error", error });
     }
 
     // подписывается на все собранные источники
@@ -46,18 +71,23 @@ export abstract class FlowComputationBase<T> {
     }
 
     // сигнализирует о завершении выполнения функции-геттера
-    protected finalize() {
+    public finalize() {
         this.finalized = true;
     }
 
     // подготавливает объект к удалению из памяти, очищая все подписки и ссылки
     public dispose(): void {
         this.finalize();
+
         for (const subscription of this.subscriptions) {
             subscription.unsubscribe();
         }
         this.subscriptions.length = 0;
-        this.sources.clear();
+
+        // TODO: remove
+        // this.sources.clear();
+
+        // NOTE: не удаляем value и lastValues, потому что они продолжают использоваться даже без подписок
     }
 
     // возвращает набор собранных источников во время выполнения функции-геттера
@@ -67,10 +97,23 @@ export abstract class FlowComputationBase<T> {
 
     // проверяет, изменился ли источник с момента отписки от него
     private hasSourceChanged(source: Flow<unknown>): boolean {
-        const currentValue = source.getSnapshot();
         const lastValue = this.lastValues.get(source);
-        // console.log("hasSourceChanged", { currentValue, lastValue });
-        return !Object.is(currentValue, lastValue);
+        if (!lastValue) {
+            return true;
+        }
+
+        try {
+            const currentValue = source.getSnapshot();
+            if (lastValue.type === "success") {
+                return !Object.is(currentValue, lastValue.value);
+            }
+        } catch (err) {
+            if (lastValue.type === "error") {
+                return !Object.is(err, lastValue.error);
+            }
+        }
+
+        return true;
     }
 
     // проверяет, изменились ли источники с момента отписки от него
