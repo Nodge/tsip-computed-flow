@@ -25,7 +25,6 @@ export class FlowComputation<T> extends FlowComputationBase<T> {
                 }
             },
             skip() {
-                // todo: test this
                 throw AbortSignal.abort().reason;
             },
         };

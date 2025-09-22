@@ -8,26 +8,44 @@ export interface AsyncFlowComputationContext extends FlowComputationContext {
     readonly signal: AbortSignal;
 }
 
+let id = 0;
 export class AsyncFlowComputation<T> extends FlowComputation<AsyncFlowState<T>> {
     private abortController: AbortController;
+    private i: number;
+    public readonly epoch: number;
 
-    public constructor() {
+    public constructor(epoch: number) {
         super();
         this.abortController = new AbortController();
+        this.i = ++id;
+        this.epoch = epoch;
+
+        console.log("NEW COMPUTATION", this.i, { epoch });
     }
 
     public getContext(): AsyncFlowComputationContext {
         return {
             ...super.getContext(),
-            getAsync: (flow) => {
+            getAsync: async (flow) => {
                 this.addSource(flow);
-                const value = flow.getSnapshot();
+                try {
+                    const snapshot = flow.getSnapshot();
+                    if (snapshot.status === "error") {
+                        throw snapshot.error;
+                    }
 
-                // todo: shallow equal for AsyncState?
-                // todo: сохранять ссылку на промис, а не снапшот?
-                this.addSourceValue(flow, value);
+                    this.setSourceValue(flow, snapshot);
+                    if (snapshot.status === "success") {
+                        return snapshot.data;
+                    }
 
-                return flow.asPromise();
+                    const data = await flow.asPromise();
+                    this.setSourceValue(flow, flow.getSnapshot());
+                    return data;
+                } catch (err) {
+                    this.setSourceValue(flow, flow.getSnapshot());
+                    throw err;
+                }
             },
             signal: this.abortController.signal,
         };
@@ -35,7 +53,12 @@ export class AsyncFlowComputation<T> extends FlowComputation<AsyncFlowState<T>> 
 
     // сигнализирует о завершении выполнения функции-геттера
     public finalize() {
+        console.log("END COMPUTATION", this.i, { epoch: this.epoch });
         super.finalize();
+        this.abortController.abort();
+    }
+
+    public abort() {
         this.abortController.abort();
     }
 }

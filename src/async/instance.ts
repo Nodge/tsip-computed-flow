@@ -2,6 +2,8 @@ import type { AsyncFlow, AsyncFlowState, FlowSubscription } from "@tsip/types";
 import { ComputedFlowBase } from "../base/instance";
 import { AsyncFlowComputation, type AsyncFlowComputationContext } from "./computation";
 import type { FlowComputationBase } from "../base/computation";
+import { tryPromise } from "../lib/tryPromise";
+import { isAbortError } from "../lib/isAbortError";
 
 /**
  * Internal subscription object that extends the public FlowSubscription interface.
@@ -20,11 +22,25 @@ export interface Subscription extends FlowSubscription {
 
 export type AsyncComputedFlowGetter<Data> = (ctx: AsyncFlowComputationContext) => Promise<Data>;
 
+export interface AsyncComputedFlowOptions<T> {
+    initialValue: AsyncFlowState<T>;
+}
+
 export class AsyncComputedFlow<T> extends ComputedFlowBase<AsyncFlowState<T>> implements AsyncFlow<T> {
     private getter: AsyncComputedFlowGetter<T>;
+    private options: AsyncComputedFlowOptions<T> | undefined;
 
     // in-progress вычисления
-    private pendingComputations: AsyncFlowComputation<T>[];
+    // TODO: replace to epoch number
+    private pendingComputation: AsyncFlowComputation<T> | null;
+
+    // последнее полностью завершенное вычисление
+    private lastFinishedComputation: FlowComputationBase<AsyncFlowState<T>> | null;
+
+    // поколение вычислений. Используется для игнорирования устаревших вычислений при конкурентном выполнении
+    private epochCounter: number;
+    // номер поколения для последнего вычисления, которое выполнено до конца
+    private currentEpoch: number;
 
     /**
      * Cached promise returned from the getDataSnapshot()
@@ -36,10 +52,14 @@ export class AsyncComputedFlow<T> extends ComputedFlowBase<AsyncFlowState<T>> im
      *
      * @param getter
      */
-    public constructor(getter: AsyncComputedFlowGetter<T>) {
+    public constructor(getter: AsyncComputedFlowGetter<T>, options?: AsyncComputedFlowOptions<T>) {
         super();
         this.getter = getter;
-        this.pendingComputations = [];
+        this.options = options;
+        this.pendingComputation = null;
+        this.lastFinishedComputation = null;
+        this.epochCounter = 0;
+        this.currentEpoch = 0;
     }
 
     /**
@@ -102,21 +122,23 @@ export class AsyncComputedFlow<T> extends ComputedFlowBase<AsyncFlowState<T>> im
     }
 
     protected compute() {
-        const computation = new AsyncFlowComputation<T>();
+        console.log("ASYNC COMPUTE START");
+
+        this.epochCounter++;
+        const computation = new AsyncFlowComputation<T>(this.epochCounter);
 
         const state: AsyncFlowState<T> = {
             status: "pending",
-            // todo: когда перетирается? нужны тесты
-            data: this.cachedComputation?.getValue().data,
+            data: this.lastFinishedComputation?.getValue().data,
         };
         computation.setValue(state);
 
         this.onComputationStarted(computation);
 
-        const promise = this.getter(computation.getContext());
+        const promise = tryPromise(() => this.getter(computation.getContext()));
         promise.then(
             (data) => {
-                // console.log("RESOLVED", { data });
+                console.log("RESOLVED", { data });
 
                 const state: AsyncFlowState<T> = {
                     status: "success",
@@ -127,11 +149,24 @@ export class AsyncComputedFlow<T> extends ComputedFlowBase<AsyncFlowState<T>> im
                 this.onComputationFinished(computation);
             },
             (error: unknown) => {
-                const state: AsyncFlowState<T> = {
+                console.log("REJECTED", { error });
+
+                let state: AsyncFlowState<T> = {
                     status: "error",
                     error,
-                    data: this.cachedComputation?.getValue().data,
                 };
+
+                if (isAbortError(error)) {
+                    if (this.lastFinishedComputation) {
+                        console.log("CACHED COMPUTATION", this.lastFinishedComputation);
+                        state = this.lastFinishedComputation.getValue();
+                    } else if (this.options) {
+                        state = this.options.initialValue;
+                    }
+                } else {
+                    state.data = this.lastFinishedComputation?.getValue().data;
+                }
+
                 computation.setValue(state);
 
                 this.onComputationFinished(computation);
@@ -142,31 +177,37 @@ export class AsyncComputedFlow<T> extends ComputedFlowBase<AsyncFlowState<T>> im
     }
 
     private onComputationStarted(computation: AsyncFlowComputation<T>) {
-        this.pendingComputations.push(computation);
+        this.pendingComputation?.abort();
+        this.pendingComputation = computation;
     }
 
-    protected onComputationFinished(computation: FlowComputationBase<AsyncFlowState<T>>) {
+    protected onComputationFinished(computation: FlowComputationBase<AsyncFlowState<T>> | AsyncFlowComputation<T>) {
         computation.finalize();
 
-        // todo: remove pending computation
-        // todo: resolve computations in order
+        const epoch = "epoch" in computation ? computation.epoch : 0;
+        const isOutdatedComputation = this.currentEpoch > epoch;
+
+        if (isOutdatedComputation) {
+            console.log("=================================== OUTDATED COMP");
+            return;
+        }
+
+        this.currentEpoch = epoch;
+        this.pendingComputation = null;
+        this.lastFinishedComputation = computation;
 
         super.onComputationFinished(computation);
 
-        // дополнительно уведомляем о завершении асинхронной операции
-        this.notify();
-    }
+        // обновляем data в pending значении in-progress вычисления
+        if (this.cachedComputation !== computation && this.cachedComputation?.getValue().status === "pending") {
+            const state: AsyncFlowState<T> = {
+                status: "pending",
+                data: computation.getValue().data,
+            };
+            this.cachedComputation.setValue(state);
+        }
 
-    // private onSourcesChanged() {
-    //     if (this.isAsyncState(this.value?.current)) {
-    //         const isPending = this.value.current.status === "pending";
-    //         if (isPending) {
-    //             console.log("SKIP_NOTIFY");
-    //             // TODO: тут не продолбаем кейс, когда источник поменялся и его в промисе надо вычитать заново, а мы промис покешировали?
-    //             // не нужно уведомлять подписчиков, если flow уже был в pending состоянии.
-    //             // при изменении источником мы снова переходим в pending состояние, т.е. получается ничего не изменилось
-    //             return;
-    //         }
-    //     }
-    // }
+        // дополнительно уведомляем о завершении асинхронной операции
+        this.onSourcesChanged();
+    }
 }

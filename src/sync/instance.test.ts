@@ -768,7 +768,7 @@ describe("ComputedFlow", () => {
         });
     });
 
-    describe("siubscriptions error handling", () => {
+    describe("subscriptions error handling", () => {
         it("should catch errors from listeners and throw AggregateError", () => {
             const error1 = new Error("Listener 1 error");
             const error2 = new Error("Listener 2 error");
@@ -1675,15 +1675,9 @@ describe("ComputedFlow", () => {
         });
     });
 
-    describe("prunning", () => {
-        // only recalculates until things are equal
-        // does similar pruning for live signals
-        it("");
-    });
-
-    // reading in notify
     describe("side effects detection", () => {
         // side effects in getter
+        // reading in notify
         it("");
     });
 

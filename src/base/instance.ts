@@ -120,10 +120,15 @@ export abstract class ComputedFlowBase<T> {
      */
     public getSnapshot(): T {
         // console.log("GET SNAPSHOT", {
-        //     cache: this.cachedComputation,
         //     isDirty: this.isDirty,
         //     hasListeners: this.hasListeners,
-        //     activeComputation: Boolean(this.activeComputation),
+        //     hasActiveComputation: Boolean(this.activeComputation),
+        //     // cache: this.cachedComputation,
+        //     // cacheValue: this.cachedComputation?.getValue(),
+        //     // cacheDeps: this.cachedComputation?.getSources(),
+        //     // activeValue: this.activeComputation?.getValue(),
+        //     // activeDeps: this.activeComputation?.getSources(),
+        //     ["cache === active"]: this.cachedComputation === this.activeComputation,
         // });
 
         if (this.cachedComputation) {
@@ -131,21 +136,20 @@ export abstract class ComputedFlowBase<T> {
             // 1. если мы сейчас не следим за списком источников, то значение в кеше могло устареть, поэтому сверяемся с текущими значениями в источниках (флаг hasListeners)
             // 2. если источники изменялись с предыдущего запуска (флаг isDirty)
             if (!this.hasListeners || this.isDirty) {
-                // console.log("FORCE CHECK SOURCES");
+                console.log("GET SNAPSHOT: FORCE CHECK SOURCES");
                 if (this.cachedComputation.sourcesHasBeenChanged()) {
-                    // console.log("COMPUTE 1");
+                    console.log("GET SNAPSHOT: COMPUTE 1");
                     this.cachedComputation = this.compute();
-                    this.isDirty = false;
                 }
+            } else {
+                console.log("GET SNAPSHOT: CACHED");
             }
-
-            // console.log("CACHED");
         } else {
-            // console.log("COMPUTE 2");
+            console.log("GET SNAPSHOT: COMPUTE 2");
             this.cachedComputation = this.compute();
-            this.isDirty = false;
         }
 
+        this.isDirty = false;
         return this.cachedComputation.getValue();
     }
 
@@ -154,10 +158,11 @@ export abstract class ComputedFlowBase<T> {
 
     // после успешного вычисления значения подписывается на собранные источники и отписывается от прежних источников
     protected onComputationFinished(computation: FlowComputationBase<T>) {
-        // console.log("COMPUTATION_FINISHED", {
-        //     value: computation.getValue(),
-        //     subs: this.subscriptions.size,
-        // });
+        console.log("COMPUTATION_FINISHED", {
+            // @ts-expect-error test test test
+            value: computation.value,
+            subs: this.subscriptions.size,
+        });
 
         if (this.activeComputation) {
             // отписываемся от прежнего списка источников
@@ -179,9 +184,10 @@ export abstract class ComputedFlowBase<T> {
     }
 
     protected onSourcesChanged() {
-        // console.log("ON SOURCES CHANGED", {
-        //     cache: this.cachedComputation,
-        // });
+        console.log("ON SOURCES CHANGED", {
+            cache: this.cachedComputation,
+            isDirty: this.isDirty,
+        });
 
         if (!this.isDirty) {
             this.isDirty = true;
@@ -191,11 +197,11 @@ export abstract class ComputedFlowBase<T> {
 
     // уведомляет всех подписчиков об изменении значения в потоке
     protected notify(): void {
-        // console.log("NOTIFY", {
-        //     current_value: this.lastComputation?.current,
-        //     stack: new Error().stack,
-        //     subs: this.subscriptions.size,
-        // });
+        console.log("NOTIFY", {
+            // current_value: this.lastComputation?.current,
+            // stack: new Error().stack,
+            subs: this.subscriptions.size,
+        });
 
         const errors: unknown[] = [];
 
