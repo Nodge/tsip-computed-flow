@@ -14,9 +14,9 @@ export abstract class FlowComputationBase<T> {
     private sources: Set<Flow<unknown>>;
     private lastValues: Map<Flow<unknown>, SourceCachedValue>;
     private subscriptions: FlowSubscription[];
-    private finalized: boolean;
-    private value: { current: T } | null;
-    private error: unknown;
+    protected finalized: boolean;
+    protected value: { current: T } | null;
+    protected error: unknown;
 
     public constructor() {
         this.sources = new Set();

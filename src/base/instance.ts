@@ -16,14 +16,14 @@ export interface Subscription extends FlowSubscription {
     listener: () => void;
 }
 
-export abstract class ComputedFlowBase<T> {
+export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputationBase<T>> {
     // ссылка на последний computation, если он был
     // этот computation не подписан на источники, а нужен только для кеширования значения
-    protected cachedComputation: FlowComputationBase<T> | null;
+    protected cachedComputation: FlowComputation | null;
 
     // ссылка на computation, который подписан на изменение источников
     // сохраняется до тех пор, пока на поток есть подписки, очищается при удалении последней подписки
-    protected activeComputation: FlowComputationBase<T> | null;
+    protected activeComputation: FlowComputation | null;
 
     // есть ли активные подписки на computed поток
     private hasListeners: boolean;
@@ -154,10 +154,10 @@ export abstract class ComputedFlowBase<T> {
     }
 
     // метод для вычисления значения
-    protected abstract compute(): FlowComputationBase<T>;
+    protected abstract compute(): FlowComputation;
 
     // после успешного вычисления значения подписывается на собранные источники и отписывается от прежних источников
-    protected onComputationFinished(computation: FlowComputationBase<T>) {
+    protected onComputationFinished(computation: FlowComputation) {
         console.log("COMPUTATION_FINISHED", {
             // @ts-expect-error test test test
             value: computation.value,

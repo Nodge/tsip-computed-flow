@@ -1,7 +1,6 @@
 import type { AsyncFlow, AsyncFlowState, FlowSubscription } from "@tsip/types";
 import { ComputedFlowBase } from "../base/instance";
 import { AsyncFlowComputation, type AsyncFlowComputationContext } from "./computation";
-import type { FlowComputationBase } from "../base/computation";
 import { tryPromise } from "../lib/tryPromise";
 import { isAbortError } from "../lib/isAbortError";
 
@@ -26,26 +25,24 @@ export interface AsyncComputedFlowOptions<T> {
     initialValue: AsyncFlowState<T>;
 }
 
-export class AsyncComputedFlow<T> extends ComputedFlowBase<AsyncFlowState<T>> implements AsyncFlow<T> {
+export class AsyncComputedFlow<T>
+    extends ComputedFlowBase<AsyncFlowState<T>, AsyncFlowComputation<T>>
+    implements AsyncFlow<T>
+{
     private getter: AsyncComputedFlowGetter<T>;
     private options: AsyncComputedFlowOptions<T> | undefined;
 
-    // in-progress вычисления
-    // TODO: replace to epoch number
+    // текущее in-progress вычисление
     private pendingComputation: AsyncFlowComputation<T> | null;
 
     // последнее полностью завершенное вычисление
-    private lastFinishedComputation: FlowComputationBase<AsyncFlowState<T>> | null;
+    private lastFinishedComputation: AsyncFlowComputation<T> | null;
 
     // поколение вычислений. Используется для игнорирования устаревших вычислений при конкурентном выполнении
     private epochCounter: number;
+
     // номер поколения для последнего вычисления, которое выполнено до конца
     private currentEpoch: number;
-
-    /**
-     * Cached promise returned from the getDataSnapshot()
-     */
-    // private dataPromise: Promise<Data> | null;
 
     /**
      * Creates a new ComputedFlow instance.
@@ -85,40 +82,11 @@ export class AsyncComputedFlow<T> extends ComputedFlowBase<AsyncFlowState<T>> im
      * ```
      */
     public asPromise(): Promise<T> {
-        // this.dataPromise ??= new Promise<Data>((resolve, reject) => {
-        //     const state = this.getSnapshot();
-        //     this.assertAsyncState(state);
-        //     if (state.status === "success") {
-        //         this.dataPromise = null;
-        //         resolve(state.data);
-        //         return;
-        //     }
-        //     if (state.status === "error") {
-        //         this.dataPromise = null;
-        //         // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- Intentionally preserve the original error to avoid transformations that could break user error handling
-        //         reject(state.error);
-        //         return;
-        //     }
-        //     const subscription = this.subscribe(() => {
-        //         const state = this.getSnapshot();
-        //         this.assertAsyncState(state);
-        //         // still loading, wait for the next value
-        //         if (state.status === "pending") {
-        //             return;
-        //         }
-        //         subscription.unsubscribe();
-        //         if (state.status === "error") {
-        //             this.dataPromise = null;
-        //             // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- Intentionally preserve the original error to avoid transformations that could break user error handling
-        //             reject(state.error);
-        //             return;
-        //         }
-        //         this.dataPromise = null;
-        //         resolve(state.data);
-        //     });
-        // });
-        // return this.dataPromise;
-        return Promise.resolve(undefined as T);
+        // вычисляем актуальное значение
+        this.getSnapshot();
+
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        return this.cachedComputation!.getPromise();
     }
 
     protected compute() {
@@ -181,7 +149,7 @@ export class AsyncComputedFlow<T> extends ComputedFlowBase<AsyncFlowState<T>> im
         this.pendingComputation = computation;
     }
 
-    protected onComputationFinished(computation: FlowComputationBase<AsyncFlowState<T>> | AsyncFlowComputation<T>) {
+    protected onComputationFinished(computation: AsyncFlowComputation<T>) {
         computation.finalize();
 
         const epoch = "epoch" in computation ? computation.epoch : 0;

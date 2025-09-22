@@ -8,19 +8,16 @@ export interface AsyncFlowComputationContext extends FlowComputationContext {
     readonly signal: AbortSignal;
 }
 
-let id = 0;
 export class AsyncFlowComputation<T> extends FlowComputation<AsyncFlowState<T>> {
     private abortController: AbortController;
-    private i: number;
+    private promise: PromiseWithResolvers<T> | null;
     public readonly epoch: number;
 
     public constructor(epoch: number) {
         super();
         this.abortController = new AbortController();
-        this.i = ++id;
+        this.promise = null;
         this.epoch = epoch;
-
-        console.log("NEW COMPUTATION", this.i, { epoch });
     }
 
     public getContext(): AsyncFlowComputationContext {
@@ -53,12 +50,45 @@ export class AsyncFlowComputation<T> extends FlowComputation<AsyncFlowState<T>> 
 
     // сигнализирует о завершении выполнения функции-геттера
     public finalize() {
-        console.log("END COMPUTATION", this.i, { epoch: this.epoch });
         super.finalize();
         this.abortController.abort();
+
+        if (this.promise) {
+            this.resolvePromise(this.promise);
+        }
     }
 
     public abort() {
         this.abortController.abort();
+    }
+
+    private resolvePromise(promise: PromiseWithResolvers<T>) {
+        if (this.error) {
+            promise.reject(this.error);
+            return;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const value = this.value!.current;
+        switch (value.status) {
+            case "success":
+                promise.resolve(value.data);
+                break;
+            case "error":
+                promise.reject(value.error);
+                break;
+            default:
+                throw new Error("invalid status");
+        }
+    }
+
+    public getPromise(): Promise<T> {
+        if (!this.promise) {
+            this.promise = Promise.withResolvers();
+            if (this.finalized) {
+                this.resolvePromise(this.promise);
+            }
+        }
+        return this.promise.promise;
     }
 }

@@ -915,121 +915,166 @@ describe("AsyncComputedFlow", () => {
         });
     });
 
-    describe.skip("asPromise behavior", () => {
-        it("should resolve immediately for success state", () => {
-            // Arrange: create flow with success async state
-            // Act: call getDataSnapshot()
-            // Expect: promise resolves immediately with data
+    describe("asPromise behavior", () => {
+        it("should resolve for success state", async () => {
+            const source = createFlow(2);
+            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+
+            const promise = await flow.asPromise();
+            expect(promise).toBe(4);
         });
 
-        it("should reject immediately for error state", () => {
-            // Arrange: create flow with error async state
-            // Act: call getDataSnapshot()
-            // Expect: promise rejects immediately with error
-        });
-
-        it("should wait for pending state to resolve", () => {
-            // Arrange: create flow with pending async state
-            // Act: call getDataSnapshot()
-            // Expect: promise waits for state transition and resolves with data
-        });
-
-        it("should return same promise for concurrent calls", () => {
-            // Arrange: create flow with pending async state
-            // Act: call getDataSnapshot() multiple times concurrently
-            // Expect: all calls return same promise instance
-        });
-
-        it("should return stable promise reference when cached value exists", () => {
-            // Arrange: create flow with cached async value
-            // Act: call getDataSnapshot() multiple times
-            // Expect: returns same promise instance for cached values
-        });
-
-        it("should return stable promise reference during getter execution", () => {
-            // Arrange: create flow with long-running async getter
-            // Act: call getDataSnapshot() multiple times during execution
-            // Expect: returns same promise instance while getter is running
-        });
-
-        it("should return new promise reference when sources change during execution", () => {
-            // Arrange: create flow with async getter, start execution
-            // Act: change source values during getter execution, call getDataSnapshot()
-            // Expect: returns new promise instance for updated computation
-        });
-
-        it("should clean up subscriptions on promise resolve", () => {
-            // Arrange: create flow with pending async state, call getDataSnapshot()
-            // Act: wait for promise to resolve
-            // Expect: internal subscriptions are cleaned up after resolve
-        });
-
-        it("should clean up subscriptions on promise reject", () => {
-            // Arrange: create flow with failing async state, call getDataSnapshot()
-            // Act: wait for promise to reject
-            // Expect: internal subscriptions are cleaned up after reject
-        });
-
-        it("should ignore multiple pending states", () => {
-            // Arrange: create flow that transitions through multiple pending states
-            // Act: call getDataSnapshot() during transitions
-            // Expect: handles multiple pending states correctly without confusion
-        });
-
-        it("should throw exception if getter returns non-promise in async context", () => {
-            // Arrange: create flow with getter that returns non-promise in async context
-            // Act: call getDataSnapshot()
-            // Expect: throws exception for invalid return type
-        });
-
-        it("should handle state transitions from pending to success", () => {
-            // Arrange: create flow with pending state, call getDataSnapshot()
-            // Act: transition to success state
-            // Expect: promise resolves with success data
-        });
-
-        it("should handle state transitions from pending to error", () => {
-            // Arrange: create flow with pending state, call getDataSnapshot()
-            // Act: transition to error state
-            // Expect: promise rejects with error
-        });
-
-        it("should resolve promises in computation start order", async () => {
-            const source = createAsyncFlow<number>({ status: "success", data: 0 });
-
-            const flow = new AsyncComputedFlow(async ({ getAsync }) => {
-                const value = await getAsync(source);
-                // await new Promise((r) => setTimeout(r, timeout));
-                return value * 2;
+        it("should reject for error state", async () => {
+            const error = new Error("test");
+            const flow = new AsyncComputedFlow(async () => {
+                throw error;
             });
 
-            const listener = vi.fn();
-            flow.subscribe(listener);
-            expect(listener).toHaveBeenCalledTimes(0);
+            const promise = flow.asPromise();
+            await expect(promise).rejects.toBe(error);
+        });
 
-            // Initially pending because we are waiting for the async function to run
-            expect(flow.getSnapshot()).toEqual({ status: "pending", data: undefined });
-            expect(listener).toHaveBeenCalledTimes(0);
+        it("should wait for pending state to resolve", async () => {
+            const source = createFlow(Promise.resolve("initial"));
+            const flow = new AsyncComputedFlow(async ({ get }) => get(source));
 
+            await expect(flow.asPromise()).resolves.toBe("initial");
+
+            const { promise, resolve } = Promise.withResolvers<string>();
+            source.emit(promise);
+
+            const status = await Promise.race([promise, Promise.resolve("pending")]);
+            expect(status).toBe("pending");
+
+            resolve("resolved");
+
+            const status2 = await Promise.race([promise, Promise.resolve("pending")]);
+            expect(status2).toBe("resolved");
+        });
+
+        it("should return same promise during getter execution", async () => {
+            const source = createFlow(2);
+            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+
+            const p1 = flow.asPromise();
+            const p2 = flow.asPromise();
+            expect(p1).toBe(p2);
+            await expect(p1).resolves.toBe(4);
+
+            const p3 = flow.asPromise();
+            expect(p3).toBe(p2);
+        });
+
+        it("should return same promise when cached value exists", async () => {
+            const source = createFlow(2);
+            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+
+            await expect(flow.asPromise()).resolves.toBe(4);
+
+            const p1 = flow.asPromise();
+            source.emit(2);
+            const p2 = flow.asPromise();
+            expect(p1).toBe(p2);
+        });
+
+        it("should return new promise if sources changed", async () => {
+            const source = createFlow(2);
+            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+
+            await expect(flow.asPromise()).resolves.toBe(4);
+
+            const p1 = flow.asPromise();
+            source.emit(3);
+            const p2 = flow.asPromise();
+            expect(p1).not.toBe(p2);
+            await expect(p2).resolves.toBe(6);
+        });
+
+        it("should return new promise if sources changed during execution", async () => {
+            const source = createFlow(2);
+            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+
+            const p1 = flow.asPromise();
+            source.emit(3);
+            const p2 = flow.asPromise();
+            expect(p1).not.toBe(p2);
+            await expect(p1).resolves.toBe(4);
+            await expect(p2).resolves.toBe(6);
+        });
+
+        it("should ignore outdated computation (first starts, first ends)", async () => {
+            //  C1
+            //  |   C2
+            //  |   |
+            //  R1  |
+            //      |
+            //      R2
+            const source = createFlow(Promise.resolve(0));
+            const flow = new AsyncComputedFlow(async ({ get, signal }) => {
+                const value = await get(source);
+                signal.throwIfAborted();
+                return value;
+            });
+            await expect(flow.asPromise()).resolves.toBe(0);
+
+            // start first computation (C1)
+            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
+            source.emit(p1);
+            expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
+
+            // start second computation (C2)
+            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
+            source.emit(p2);
+            expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
+
+            // finish first computation
+            r1(1);
             await nextTick();
-            expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
-            expect(listener).toHaveBeenCalledTimes(1);
+            const status = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
+            expect(status).toBe("pending");
 
-            // first async operation
-            source.emit({ status: "pending" });
-            source.emit({ status: "success", data: 2 });
-            // get data promise
+            // finish second computation
+            r2(2);
+            await nextTick();
+            const status2 = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
+            expect(status2).toBe(2);
+        });
 
-            // second async operation
-            source.emit({ status: "pending" });
-            source.emit({ status: "success", data: 4 });
-            // get data promise
+        it("should ignore outdated computation (first starts, last ends)", async () => {
+            //  C1
+            //  |   C2
+            //  |   |
+            //  |   R2
+            //  R1
+            const source = createFlow(Promise.resolve(0));
+            const flow = new AsyncComputedFlow(async ({ get, signal }) => {
+                const value = await get(source);
+                signal.throwIfAborted();
+                return value;
+            });
+            await expect(flow.asPromise()).resolves.toBe(0);
 
-            // resolve second
-            // resolve first
-            // check promise1 resolved before promise2
+            // start first computation (C1)
+            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
+            source.emit(p1);
+            expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
-            // check listeners
+            // start second computation (C2)
+            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
+            source.emit(p2);
+            expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
+
+            // finish second computation
+            r2(2);
+            await nextTick();
+            const status = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
+            expect(status).toBe(2);
+
+            // finish first computation
+            r1(1);
+            await nextTick();
+            const status2 = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
+            expect(status2).toBe(2);
         });
     });
 

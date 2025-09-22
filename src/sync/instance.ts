@@ -24,7 +24,7 @@ export interface ComputedFlowOptions<T> {
     initialValue: T;
 }
 
-export class ComputedFlow<T> extends ComputedFlowBase<T> implements Flow<T> {
+export class ComputedFlow<T> extends ComputedFlowBase<T, FlowComputation<T>> implements Flow<T> {
     private getter: ComputedFlowGetter<T>;
     private options: ComputedFlowOptions<T> | undefined;
 
