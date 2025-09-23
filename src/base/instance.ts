@@ -16,33 +16,56 @@ export interface Subscription extends FlowSubscription {
     listener: () => void;
 }
 
+/**
+ * Abstract base class for computed flows that provides subscription management
+ * and value caching functionality.
+ *
+ * @typeParam T - The type of value this flow produces
+ * @typeParam FlowComputation - The type of computation used by this flow
+ *
+ * @example
+ * ```typescript
+ * class MyComputedFlow extends ComputedFlowBase<number, MyComputation> {
+ *   protected compute(): MyComputation {
+ *     return new MyComputation(() => this.calculateValue());
+ *   }
+ *
+ *   private calculateValue(): number {
+ *     // Implementation details
+ *     return 42;
+ *   }
+ * }
+ * ```
+ */
 export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputationBase<T>> {
-    // ссылка на последний computation, если он был
-    // этот computation не подписан на источники, а нужен только для кеширования значения
-    protected cachedComputation: FlowComputation | null;
+    /**
+     * Reference to the last computation result, used for caching values.
+     * This computation is not subscribed to sources and exists only for value caching.
+     */
+    protected cachedComputation: FlowComputation | null = null;
 
-    // ссылка на computation, который подписан на изменение источников
-    // сохраняется до тех пор, пока на поток есть подписки, очищается при удалении последней подписки
-    protected activeComputation: FlowComputation | null;
+    /**
+     * Reference to the computation that is actively subscribed to source changes.
+     * This is maintained as long as there are active subscriptions to this flow,
+     * and is cleared when the last subscription is removed.
+     */
+    protected activeComputation: FlowComputation | null = null;
 
-    // есть ли активные подписки на computed поток
-    private hasListeners: boolean;
+    /**
+     * Indicates whether there are active subscriptions to this computed flow.
+     */
+    private hasListeners = false;
 
-    // нужно ли пересчитать значение потока
-    private isDirty: boolean;
+    /**
+     * Indicates whether the flow's value needs to be recalculated.
+     * Set to true when source flows change, reset to false after recomputation.
+     */
+    private isDirty = true;
 
     /**
      * Set of listener functions that are called when the value changes.
      */
-    private subscriptions: Set<Subscription>;
-
-    public constructor() {
-        this.cachedComputation = null;
-        this.activeComputation = null;
-        this.hasListeners = false;
-        this.isDirty = true;
-        this.subscriptions = new Set();
-    }
+    private subscriptions = new Set<Subscription>();
 
     /**
      * Subscribes to changes in the flow.
@@ -73,7 +96,7 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
             unsubscribe: () => {
                 this.subscriptions.delete(subscription);
 
-                // перестаем слушать источники при удалении последнего подписчика
+                // Stop listening to sources when the last subscriber is removed
                 if (this.subscriptions.size === 0 && this.activeComputation) {
                     this.hasListeners = false;
                     this.activeComputation.dispose();
@@ -85,12 +108,12 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
         if (!this.hasListeners) {
             this.hasListeners = true;
 
-            // если ранее не было подписчиков, значит мы не следили за источниками потока
-            // значит нужно запустить вычисление, чтобы определить актуальный список источников, на которые надо подписаться
+            // If there were no previous subscribers, we weren't tracking flow sources
+            // We need to run computation to determine the current list of sources to subscribe to
             try {
                 this.getSnapshot();
             } catch {
-                // the error will be delivered via getSnapshot call by flow's consumer
+                // The error will be delivered via getSnapshot call by flow's consumer
             }
         }
 
@@ -119,33 +142,7 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
      * ```
      */
     public getSnapshot(): T {
-        // console.log("GET SNAPSHOT", {
-        //     isDirty: this.isDirty,
-        //     hasListeners: this.hasListeners,
-        //     hasActiveComputation: Boolean(this.activeComputation),
-        //     // cache: this.cachedComputation,
-        //     // cacheValue: this.cachedComputation?.getValue(),
-        //     // cacheDeps: this.cachedComputation?.getSources(),
-        //     // activeValue: this.activeComputation?.getValue(),
-        //     // activeDeps: this.activeComputation?.getSources(),
-        //     ["cache === active"]: this.cachedComputation === this.activeComputation,
-        // });
-
-        if (this.cachedComputation) {
-            // кейсы для пересчета:
-            // 1. если мы сейчас не следим за списком источников, то значение в кеше могло устареть, поэтому сверяемся с текущими значениями в источниках (флаг hasListeners)
-            // 2. если источники изменялись с предыдущего запуска (флаг isDirty)
-            if (!this.hasListeners || this.isDirty) {
-                console.log("GET SNAPSHOT: FORCE CHECK SOURCES");
-                if (this.cachedComputation.sourcesHasBeenChanged()) {
-                    console.log("GET SNAPSHOT: COMPUTE 1");
-                    this.cachedComputation = this.compute();
-                }
-            } else {
-                console.log("GET SNAPSHOT: CACHED");
-            }
-        } else {
-            console.log("GET SNAPSHOT: COMPUTE 2");
+        if (!this.cachedComputation || this.shouldRecompute()) {
             this.cachedComputation = this.compute();
         }
 
@@ -153,27 +150,47 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
         return this.cachedComputation.getValue();
     }
 
-    // метод для вычисления значения
+    /**
+     * Determines whether the cached computation needs to be recalculated.
+     *
+     * @returns true if recomputation is needed, false otherwise
+     */
+    private shouldRecompute(): boolean {
+        // Cases for recalculation:
+        // 1. If we're not currently tracking sources, the cached value might be stale,
+        //    so we need to check current values in sources (hasListeners flag)
+        // 2. If sources have changed since the last run (isDirty flag)
+        return (
+            (!this.hasListeners || this.isDirty) &&
+            (!this.cachedComputation || this.cachedComputation.sourcesHasBeenChanged())
+        );
+    }
+
+    /**
+     * Abstract method for computing the flow's value.
+     * Must be implemented by subclasses to define the computation logic.
+     *
+     * @returns A new computation instance containing the computed value
+     */
     protected abstract compute(): FlowComputation;
 
-    // после успешного вычисления значения подписывается на собранные источники и отписывается от прежних источников
+    /**
+     * Called after successful computation to manage source subscriptions.
+     * Subscribes to the new list of sources and unsubscribes from previous sources.
+     *
+     * @param computation - The computation that was just completed
+     */
     protected onComputationFinished(computation: FlowComputation) {
-        console.log("COMPUTATION_FINISHED", {
-            // @ts-expect-error test test test
-            value: computation.value,
-            subs: this.subscriptions.size,
-        });
-
         if (this.activeComputation) {
-            // отписываемся от прежнего списка источников
+            // Unsubscribe from the previous list of sources
             this.activeComputation.dispose();
             this.activeComputation = null;
         }
 
         if (this.hasListeners) {
-            // подписываемся на новый список источников
+            // Subscribe to the new list of sources
             computation.subscribeToSources(() => {
-                // проверяем, что уведомление пришло от актуального списка источников
+                // Verify that the notification came from the current list of sources
                 if (this.activeComputation === computation) {
                     this.onSourcesChanged();
                 }
@@ -183,26 +200,21 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
         }
     }
 
+    /**
+     * Called when source flows change their values.
+     */
     protected onSourcesChanged() {
-        console.log("ON SOURCES CHANGED", {
-            cache: this.cachedComputation,
-            isDirty: this.isDirty,
-        });
-
         if (!this.isDirty) {
             this.isDirty = true;
             this.notify();
         }
     }
 
-    // уведомляет всех подписчиков об изменении значения в потоке
+    /**
+     * Notifies all subscribers about changes in the flow's value.
+     * @throws {AggregateError} When one or more listeners throw errors
+     */
     protected notify(): void {
-        console.log("NOTIFY", {
-            // current_value: this.lastComputation?.current,
-            // stack: new Error().stack,
-            subs: this.subscriptions.size,
-        });
-
         const errors: unknown[] = [];
 
         for (const subscription of new Set(this.subscriptions)) {

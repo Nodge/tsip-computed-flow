@@ -1,68 +1,112 @@
 import type { Flow, FlowSubscription } from "@tsip/types";
 
-type SourceCachedValue =
-    | {
-          type: "success";
-          value: unknown;
-      }
-    | {
-          type: "error";
-          error: unknown;
-      };
+/**
+ * Represents a cached value from a flow, which can be either successful or an error.
+ * @internal
+ */
+type SourceCachedValue = { type: "success"; value: unknown } | { type: "error"; error: unknown };
 
+/**
+ * Abstract base class for flow computations that manages dependencies,
+ * subscriptions, and cached values.
+ *
+ * @typeParam T - The type of value this computation produces
+ */
 export abstract class FlowComputationBase<T> {
-    private sources: Set<Flow<unknown>>;
-    private lastValues: Map<Flow<unknown>, SourceCachedValue>;
-    private subscriptions: FlowSubscription[];
-    protected finalized: boolean;
-    protected value: { current: T } | null;
+    /** Set of flows that this computation depends on */
+    private sources = new Set<Flow<unknown>>();
+
+    /** Cache of the last known values from each source */
+    private lastValues = new Map<Flow<unknown>, SourceCachedValue>();
+
+    /** Active subscriptions to sources */
+    private subscriptions: FlowSubscription[] = [];
+
+    /** Whether the computation has been finalized (no more sources can be added) */
+    protected finalized = false;
+
+    /** The current computed value, wrapped in an object for handling undefined values */
+    protected value: { current: T } | null = null;
+
+    /** The current error, if any */
     protected error: unknown;
 
-    public constructor() {
-        this.sources = new Set();
-        this.lastValues = new Map();
-        this.subscriptions = [];
-        this.finalized = false;
-        this.value = null;
-    }
-
-    public setValue(value: T) {
+    /**
+     * Sets the computed value and clears any error state.
+     *
+     * @param value - The value to set as the current computation result
+     */
+    public setValue(value: T): void {
         this.value = { current: value };
-        this.error = null;
+        this.error = undefined;
     }
 
-    public setError(error: unknown) {
+    /**
+     * Sets an error and clears any current value.
+     *
+     * @param error - The error that occurred during computation
+     */
+    public setError(error: unknown): void {
         this.value = null;
         this.error = error;
     }
 
+    /**
+     * Gets the current computed value.
+     *
+     * @returns The current value
+     * @throws The stored error if the computation is in an error state
+     */
     public getValue(): T {
         if (this.error) {
             // eslint-disable-next-line @typescript-eslint/only-throw-error
             throw this.error;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the value must exist at this point
         return this.value!.current;
     }
 
+    /**
+     * Adds a flow as a dependency for this computation.
+     *
+     * Flows added after finalization are ignored to prevent
+     * inconsistent dependency tracking.
+     *
+     * @param flow - The flow to add as a source dependency
+     */
     protected addSource(flow: Flow<unknown>): void {
-        // если выполнение функции-геттера уже завершилось, то игнорируем все новые источники
         if (this.finalized) {
             return;
         }
         this.sources.add(flow);
     }
 
-    protected setSourceValue(flow: Flow<unknown>, value: unknown) {
+    /**
+     * Caches a successful value from a flow.
+     *
+     * @param flow - The source flow
+     * @param value - The value to cache
+     */
+    protected setSourceValue(flow: Flow<unknown>, value: unknown): void {
         this.lastValues.set(flow, { type: "success", value });
     }
 
-    protected setSourceError(flow: Flow<unknown>, error: unknown) {
+    /**
+     * Caches an error from a flow.
+     *
+     * @param flow - The source flow
+     * @param error - The error to cache
+     */
+    protected setSourceError(flow: Flow<unknown>, error: unknown): void {
         this.lastValues.set(flow, { type: "error", error });
     }
 
-    // подписывается на все собранные источники
+    /**
+     * Subscribes to all collected source flows with the provided handler.
+     *
+     * @param handler - Callback function to execute when sources change
+     */
     public subscribeToSources(handler: () => void): void {
         for (const flow of this.sources) {
             const subscription = flow.subscribe(handler);
@@ -70,12 +114,16 @@ export abstract class FlowComputationBase<T> {
         }
     }
 
-    // сигнализирует о завершении выполнения функции-геттера
-    public finalize() {
+    /**
+     * Marks the computation as finalized, preventing new sources from being added.
+     */
+    public finalize(): void {
         this.finalized = true;
     }
 
-    // подготавливает объект к удалению из памяти, очищая все подписки и ссылки
+    /**
+     * Prepares the object for garbage collection by cleaning up subscriptions and references.
+     */
     public dispose(): void {
         this.finalize();
 
@@ -84,18 +132,24 @@ export abstract class FlowComputationBase<T> {
         }
         this.subscriptions.length = 0;
 
-        // TODO: remove
-        // this.sources.clear();
-
-        // NOTE: не удаляем value и lastValues, потому что они продолжают использоваться даже без подписок
+        // NOTE: We don't cleanup this.value and this.lastValues because they continue to be used for change detection
     }
 
-    // возвращает набор собранных источников во время выполнения функции-геттера
+    /**
+     * Returns the set of flows collected during the computation.
+     *
+     * @returns A read-only set of all flows this computation depends on
+     */
     public getSources(): ReadonlySet<Flow<unknown>> {
         return this.sources;
     }
 
-    // проверяет, изменился ли источник с момента отписки от него
+    /**
+     * Checks if a flow has changed since we last cached its value.
+     *
+     * @param source - The source flow to check for changes
+     * @returns `true` if the source has changed, `false` otherwise
+     */
     private hasSourceChanged(source: Flow<unknown>): boolean {
         const lastValue = this.lastValues.get(source);
         if (!lastValue) {
@@ -116,7 +170,14 @@ export abstract class FlowComputationBase<T> {
         return true;
     }
 
-    // проверяет, изменились ли источники с момента отписки от него
+    /**
+     * Checks if any of the source flows have changed since we unsubscribed from them.
+     *
+     * This method is useful for determining if a computation needs to be re-executed
+     * due to changes in its dependencies.
+     *
+     * @returns `true` if any source has changed, `false` if all sources are unchanged
+     */
     public sourcesHasBeenChanged(): boolean {
         for (const source of this.sources) {
             if (this.hasSourceChanged(source)) {

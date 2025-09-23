@@ -1,62 +1,101 @@
-import type { AsyncFlow, AsyncFlowState, FlowSubscription } from "@tsip/types";
+import type { AsyncFlow, AsyncFlowState } from "@tsip/types";
 import { ComputedFlowBase } from "../base/instance";
 import { AsyncFlowComputation, type AsyncFlowComputationContext } from "./computation";
 import { tryPromise } from "../lib/tryPromise";
 import { isAbortError } from "../lib/isAbortError";
 
 /**
- * Internal subscription object that extends the public FlowSubscription interface.
+ * A function that computes the value for a AsyncComputedFlow.
  *
- * This interface is used internally by MutableFlowImpl to store both the public
- * unsubscribe method and the private listener function for each subscription.
+ * This function receives a computation context that can be used to track
+ * dependencies and is called whenever the computed value needs to be recalculated.
  *
- * @internal
+ * @typeParam T - The type of value that will be computed and returned
+ * @param ctx - The computation context used for dependency tracking
+ * @returns A promise that resolves to the computed value of type T
  */
-export interface Subscription extends FlowSubscription {
-    /**
-     * The listener function that will be called when the flow's value changes.
-     */
-    listener: () => void;
-}
+export type AsyncComputedFlowGetter<T> = (ctx: AsyncFlowComputationContext) => Promise<T>;
 
-export type AsyncComputedFlowGetter<Data> = (ctx: AsyncFlowComputationContext) => Promise<Data>;
-
+/**
+ * Configuration options for creating an AsyncComputedFlow.
+ *
+ * @typeParam T - The type of the computed value
+ */
 export interface AsyncComputedFlowOptions<T> {
+    /**
+     * The initial value to use when the computation fails with an abort error
+     * and no cached computation is available.
+     */
     initialValue: AsyncFlowState<T>;
 }
 
+/**
+ * A asynchronous computed flow that automatically recalculates its value
+ * when its dependencies change.
+ *
+ * @typeParam T - The type of value this flow computes and emits
+ *
+ * @example
+ * ```typescript
+ * const userFlow = new AsyncComputedFlow(
+ *   async (ctx) => {
+ *     const userId = ctx.get(userIdFlow);
+ *     return await fetchUser(userId);
+ *   }
+ * );
+ *
+ * // Get current state
+ * const state = userFlow.getSnapshot();
+ *
+ * // Wait for completion
+ * const userData = await userFlow.asPromise();
+ * ```
+ */
 export class AsyncComputedFlow<T>
     extends ComputedFlowBase<AsyncFlowState<T>, AsyncFlowComputation<T>>
     implements AsyncFlow<T>
 {
+    /**
+     * The function that computes this flow's value.
+     */
     private getter: AsyncComputedFlowGetter<T>;
-    private options: AsyncComputedFlowOptions<T> | undefined;
-
-    // текущее in-progress вычисление
-    private pendingComputation: AsyncFlowComputation<T> | null;
-
-    // последнее полностью завершенное вычисление
-    private lastFinishedComputation: AsyncFlowComputation<T> | null;
-
-    // поколение вычислений. Используется для игнорирования устаревших вычислений при конкурентном выполнении
-    private epochCounter: number;
-
-    // номер поколения для последнего вычисления, которое выполнено до конца
-    private currentEpoch: number;
 
     /**
-     * Creates a new ComputedFlow instance.
+     * Configuration options for this flow instance
+     */
+    private options: AsyncComputedFlowOptions<T> | undefined;
+
+    /**
+     * The currently in-progress computation, if any
+     */
+    private pendingComputation: AsyncFlowComputation<T> | null = null;
+
+    /**
+     * The last fully completed computation, if any
+     */
+    private lastFinishedComputation: AsyncFlowComputation<T> | null = null;
+
+    /**
+     * Generation counter for computations. Used to ignore outdated computations
+     * when multiple async operations run concurrently
+     */
+    private epochCounter = 0;
+
+    /**
+     * The generation number of the last computation that completed successfully
+     */
+    private currentEpoch = 0;
+
+    /**
+     * Creates a new AsyncComputedFlow instance.
      *
-     * @param getter
+     * @param getter - The async function that computes the flow's value
+     * @param options - Optional configuration for this computed flow.
      */
     public constructor(getter: AsyncComputedFlowGetter<T>, options?: AsyncComputedFlowOptions<T>) {
         super();
         this.getter = getter;
         this.options = options;
-        this.pendingComputation = null;
-        this.lastFinishedComputation = null;
-        this.epochCounter = 0;
-        this.currentEpoch = 0;
     }
 
     /**
@@ -66,32 +105,37 @@ export class AsyncComputedFlow<T>
      * If the current state is already resolved (success or error), the promise resolves/rejects immediately.
      * If the current state is pending, the method subscribes to state changes and waits for resolution.
      *
+     * This method triggers computation if needed and returns a promise that represents the final result.
+     *
      * @returns A promise that resolves with the data on success, or rejects with the error on failure
      *
      * @example
      * ```typescript
-     * const asyncFlow = createAsyncFlow<string>({ status: "pending" });
+     * const userFlow = new AsyncComputedFlow(async (ctx) => {
+     *   const userId = ctx.get(userIdFlow);
+     *   return await fetchUser(userId);
+     * });
      *
      * // This will wait for the flow to resolve
-     * asyncFlow.getDataSnapshot()
+     * userFlow.asPromise()
      *   .then(data => console.log('Success:', data))
      *   .catch(error => console.error('Error:', error));
-     *
-     * // Later, emit a success state
-     * asyncFlow.emit({ status: "success", data: "Hello World" });
      * ```
      */
     public asPromise(): Promise<T> {
-        // вычисляем актуальное значение
+        // Compute the current value to ensure computation is started
         this.getSnapshot();
 
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- cachedComputation is guaranteed to exist after getSnapshot()
         return this.cachedComputation!.getPromise();
     }
 
-    protected compute() {
-        console.log("ASYNC COMPUTE START");
-
+    /**
+     * Performs the actual computation of this flow's value.
+     *
+     * @returns A AsyncFlowComputation containing the computed value or error state
+     */
+    protected compute(): AsyncFlowComputation<T> {
         this.epochCounter++;
         const computation = new AsyncFlowComputation<T>(this.epochCounter);
 
@@ -100,43 +144,20 @@ export class AsyncComputedFlow<T>
             data: this.lastFinishedComputation?.getValue().data,
         };
         computation.setValue(state);
-
         this.onComputationStarted(computation);
 
         const promise = tryPromise(() => this.getter(computation.getContext()));
         promise.then(
             (data) => {
-                console.log("RESOLVED", { data });
-
-                const state: AsyncFlowState<T> = {
+                computation.setValue({
                     status: "success",
                     data,
-                };
-                computation.setValue(state);
-
+                });
                 this.onComputationFinished(computation);
             },
             (error: unknown) => {
-                console.log("REJECTED", { error });
-
-                let state: AsyncFlowState<T> = {
-                    status: "error",
-                    error,
-                };
-
-                if (isAbortError(error)) {
-                    if (this.lastFinishedComputation) {
-                        console.log("CACHED COMPUTATION", this.lastFinishedComputation);
-                        state = this.lastFinishedComputation.getValue();
-                    } else if (this.options) {
-                        state = this.options.initialValue;
-                    }
-                } else {
-                    state.data = this.lastFinishedComputation?.getValue().data;
-                }
-
+                const state = this.handleComputationError(error);
                 computation.setValue(state);
-
                 this.onComputationFinished(computation);
             },
         );
@@ -144,38 +165,69 @@ export class AsyncComputedFlow<T>
         return computation;
     }
 
-    private onComputationStarted(computation: AsyncFlowComputation<T>) {
+    /**
+     * Handles computation errors and returns the appropriate state.
+     */
+    private handleComputationError(error: unknown): AsyncFlowState<T> {
+        const lastValue = this.lastFinishedComputation?.getValue();
+
+        if (isAbortError(error)) {
+            return (
+                lastValue ??
+                this.options?.initialValue ?? {
+                    status: "error",
+                    error,
+                }
+            );
+        }
+
+        return {
+            status: "error",
+            error,
+            data: lastValue?.data,
+        };
+    }
+
+    /**
+     * Handles the start of a new computation.
+     *
+     * @param computation - The newly started computation
+     */
+    private onComputationStarted(computation: AsyncFlowComputation<T>): void {
+        // This ensures that only the most recent computation continues, preventing race conditions.
         this.pendingComputation?.abort();
         this.pendingComputation = computation;
     }
 
-    protected onComputationFinished(computation: AsyncFlowComputation<T>) {
+    /**
+     * Handles the completion of a computation.
+     *
+     * @param computation - The computation that has finished
+     */
+    protected onComputationFinished(computation: AsyncFlowComputation<T>): void {
         computation.finalize();
 
-        const epoch = "epoch" in computation ? computation.epoch : 0;
-        const isOutdatedComputation = this.currentEpoch > epoch;
-
-        if (isOutdatedComputation) {
-            console.log("=================================== OUTDATED COMP");
+        // Ignore outdated computations
+        if (this.currentEpoch > computation.epoch) {
             return;
         }
 
-        this.currentEpoch = epoch;
+        this.currentEpoch = computation.epoch;
         this.pendingComputation = null;
         this.lastFinishedComputation = computation;
 
+        // Subscribe to the new list of sources and unsubscribe from previous sources
         super.onComputationFinished(computation);
 
-        // обновляем data в pending значении in-progress вычисления
+        // Update data in pending state of any in-progress computation
         if (this.cachedComputation !== computation && this.cachedComputation?.getValue().status === "pending") {
-            const state: AsyncFlowState<T> = {
+            this.cachedComputation.setValue({
                 status: "pending",
                 data: computation.getValue().data,
-            };
-            this.cachedComputation.setValue(state);
+            });
         }
 
-        // дополнительно уведомляем о завершении асинхронной операции
+        // Notify flow consumers about the completion of the async operation
         this.onSourcesChanged();
     }
 }

@@ -793,20 +793,17 @@ describe("AsyncComputedFlow", () => {
 
             // start first computation (C1)
             const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            console.log("========== EMIT R1 =============");
             source.emit(p1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(2); // success->pending transition
 
             // start second computation (C2)
             const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            console.log("========== EMIT R2 =============");
             source.emit(p2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
 
             // finish second computation
-            console.log("========== RESOLVE R2 =============");
             r2(2);
             await nextTick();
             const value1 = flow.getSnapshot();
