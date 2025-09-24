@@ -65,7 +65,7 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
     /**
      * Set of listener functions that are called when the value changes.
      */
-    private subscriptions = new Set<Subscription>();
+    private subscriptions: ReadonlySet<Subscription> = new Set<Subscription>();
 
     /**
      * Subscribes to changes in the flow.
@@ -94,7 +94,9 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
         const subscription: Subscription = {
             listener,
             unsubscribe: () => {
-                this.subscriptions.delete(subscription);
+                const subscriptions = new Set(this.subscriptions);
+                subscriptions.delete(subscription);
+                this.subscriptions = subscriptions;
 
                 // Stop listening to sources when the last subscriber is removed
                 if (this.subscriptions.size === 0 && this.activeComputation) {
@@ -117,7 +119,9 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
             }
         }
 
-        this.subscriptions.add(subscription);
+        const subscriptions = new Set(this.subscriptions);
+        subscriptions.add(subscription);
+        this.subscriptions = subscriptions;
 
         return subscription;
     }
@@ -217,7 +221,7 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
     protected notify(): void {
         const errors: unknown[] = [];
 
-        for (const subscription of new Set(this.subscriptions)) {
+        for (const subscription of this.subscriptions) {
             try {
                 subscription.listener();
             } catch (error) {
