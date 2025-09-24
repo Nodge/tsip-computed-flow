@@ -23,9 +23,28 @@ export type ComputedFlowGetter<T> = (ctx: FlowComputationContext) => T;
 export interface ComputedFlowOptions<T> {
     /**
      * The initial value to use when the computation fails with an abort error
-     * and no cached computation is available.
+     * and no cached value is available.
      */
-    initialValue: T;
+    initialValue?: T;
+
+    /**
+     * Function to compare computed values to determine if they have changed.
+     *
+     * This is used to prevent unnecessary updates when the computed value
+     * is equivalent to the previous value, even if not strictly equal.
+     *
+     * @param a - The previous computed value
+     * @param b - The new computed value
+     * @returns `true` if the values are considered equal, `false` otherwise
+     * @default Object.is
+     *
+     * @example
+     * ```typescript
+     * // Custom equality for objects
+     * equals: (a, b) => deepEqual(a, b)
+     * ```
+     */
+    equals?: (a: T, b: T) => boolean; // TODO: implement
 }
 
 /**
@@ -87,7 +106,7 @@ export class ComputedFlow<T> extends ComputedFlowBase<T, FlowComputation<T>> imp
                 }
 
                 // If no cache available, use initial value if provided
-                if (this.options) {
+                if (hasInitialValue(this.options)) {
                     computation.setValue(this.options.initialValue);
                 } else {
                     computation.setError(err);
@@ -102,4 +121,16 @@ export class ComputedFlow<T> extends ComputedFlowBase<T, FlowComputation<T>> imp
         this.onComputationFinished(computation);
         return computation;
     }
+}
+
+/**
+ * Type guard function that checks if the options object contains an initialValue property.
+ *
+ * @typeParam T - The type of the value
+ * @param options - The options object to check
+ * @returns `true` if options exists and has an initialValue property, `false` otherwise
+ */
+function hasInitialValue<T>(options: ComputedFlowOptions<T> | undefined): options is { initialValue: T } {
+    if (!options) return false;
+    return Object.hasOwn(options, "initialValue");
 }

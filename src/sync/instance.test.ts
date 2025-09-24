@@ -914,7 +914,7 @@ describe("ComputedFlow", () => {
 
         it("should accept undefined as intial value", () => {
             const source = createFlow(0);
-            const flow = new ComputedFlow(
+            const flow = new ComputedFlow<number | undefined>(
                 ({ get, skip }) => {
                     const value = get(source);
                     if (value % 2 === 0) {

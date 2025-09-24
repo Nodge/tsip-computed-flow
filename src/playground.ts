@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/unbound-method */
 import type { AsyncFlow, Flow } from "@tsip/types";
 import { createFlow, createAsyncFlow } from "@tsip/flow";
-import { computedFlow } from "./factory";
+import { computedFlow } from "./sync/factory";
+import { asyncComputedFlow } from "./async/factory";
 import { takeLatest } from "./utils/takeLatest";
 import { takeLeading } from "./utils/takeLeading";
 import { debounce } from "./utils/debounce";
@@ -21,7 +21,7 @@ const mappedFlow = computedFlow(({ get }) => {
 });
 
 // filter
-const filteredFlow = computedFlow<number>(({ get, skip }) => {
+const filteredFlow = computedFlow(({ get, skip }) => {
     const value = get(numberFlow);
     if (value % 2) {
         skip();
@@ -30,7 +30,7 @@ const filteredFlow = computedFlow<number>(({ get, skip }) => {
 });
 
 // join
-const joinedFlow = computedFlow(async ({ getAsync }) => {
+const joinedFlow = asyncComputedFlow(async ({ getAsync }) => {
     const [a, b] = await Promise.all([
         // first input
         getAsync(asyncFlow),
@@ -45,11 +45,10 @@ const joinedFlow = computedFlow(async ({ getAsync }) => {
 // NOTE: computed всегда пытается отменить выполнение через signal.
 //       если использовать signal, то получится takeLatest (в потоке не будет промежуточных устаревших значений)
 //       если не использовать signal, то получится takeEvery (в потоке будут устаревшие значения, но порядок значений при этом гарантирован, гонки исключены)
-const latestFlow = computedFlow(async ({ getAsync, signal, skip }) => {
+const latestFlow = asyncComputedFlow(async ({ getAsync, signal, skip }) => {
     const value = await getAsync(asyncFlow);
 
     // селекторы ловят AbortError и не эмитят новое значение в поток
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     signal.throwIfAborted();
 
     // ровно то же самое, но через skip
@@ -95,6 +94,17 @@ const select = computedFlow(({ get, skip }, param: string) => {
 
     return sliceData;
 });
+
+const select2 = computedFlow(
+    (ctx, param: string) => {
+        return ctx.get(numberFlow) * 2;
+    },
+    {
+        initialValue: 0,
+        equals: (a, b) => a > b,
+        paramEquals: Object.is,
+    },
+);
 
 // mixed promise/non-promise
 const mixed = computedFlow(({ get }) => {

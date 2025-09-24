@@ -24,9 +24,28 @@ export type AsyncComputedFlowGetter<T> = (ctx: AsyncFlowComputationContext) => P
 export interface AsyncComputedFlowOptions<T> {
     /**
      * The initial value to use when the computation fails with an abort error
-     * and no cached computation is available.
+     * and no cached value is available.
      */
-    initialValue: AsyncFlowState<T>;
+    initialValue?: AsyncFlowState<T>;
+
+    /**
+     * Function to compare computed values to determine if they have changed.
+     *
+     * This is used to prevent unnecessary updates when the computed value
+     * is equivalent to the previous value, even if not strictly equal.
+     *
+     * @param a - The previous computed value
+     * @param b - The new computed value
+     * @returns `true` if the values are considered equal, `false` otherwise
+     * @default Object.is
+     *
+     * @example
+     * ```typescript
+     * // Custom equality for objects
+     * equals: (a, b) => deepEqual(a, b)
+     * ```
+     */
+    equals?: (a: T, b: T) => boolean; // TODO: implement
 }
 
 /**
