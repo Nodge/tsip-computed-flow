@@ -1,20 +1,7 @@
 import type { AsyncFlow, AsyncFlowState } from "@tsip/types";
-import { ComputedFlowBase } from "../base/instance";
-import { AsyncFlowComputation, type AsyncFlowComputationContext } from "./computation";
-import { tryPromise } from "../lib/tryPromise";
 import { isAbortError } from "../lib/isAbortError";
-
-/**
- * A function that computes the value for a AsyncComputedFlow.
- *
- * This function receives a computation context that can be used to track
- * dependencies and is called whenever the computed value needs to be recalculated.
- *
- * @typeParam T - The type of value that will be computed and returned
- * @param ctx - The computation context used for dependency tracking
- * @returns A promise that resolves to the computed value of type T
- */
-export type AsyncComputedFlowGetter<T> = (ctx: AsyncFlowComputationContext) => Promise<T>;
+import { ComputedFlowBase } from "../base/instance";
+import { AsyncFlowComputation } from "./computation";
 
 /**
  * Configuration options for creating an AsyncComputedFlow.
@@ -49,8 +36,8 @@ export interface AsyncComputedFlowOptions<T> {
 }
 
 /**
- * A asynchronous computed flow that automatically recalculates its value
- * when its dependencies change.
+ * Abstract base class for asynchronous computed flows that automatically recalculate their value
+ * when their dependencies change.
  *
  * @typeParam T - The type of value this flow computes and emits
  *
@@ -70,15 +57,10 @@ export interface AsyncComputedFlowOptions<T> {
  * const userData = await userFlow.asPromise();
  * ```
  */
-export class AsyncComputedFlow<T>
+export abstract class AsyncComputedFlowBase<T>
     extends ComputedFlowBase<AsyncFlowState<T>, AsyncFlowComputation<T>>
     implements AsyncFlow<T>
 {
-    /**
-     * The function that computes this flow's value.
-     */
-    private getter: AsyncComputedFlowGetter<T>;
-
     /**
      * Configuration options for this flow instance
      */
@@ -108,12 +90,10 @@ export class AsyncComputedFlow<T>
     /**
      * Creates a new AsyncComputedFlow instance.
      *
-     * @param getter - The async function that computes the flow's value
-     * @param options - Optional configuration for this computed flow.
+     * @param options - Optional configuration for this computed flow
      */
-    public constructor(getter: AsyncComputedFlowGetter<T>, options?: AsyncComputedFlowOptions<T>) {
+    public constructor(options?: AsyncComputedFlowOptions<T>) {
         super();
-        this.getter = getter;
         this.options = options;
     }
 
@@ -152,7 +132,7 @@ export class AsyncComputedFlow<T>
     /**
      * Performs the actual computation of this flow's value.
      *
-     * @returns A AsyncFlowComputation containing the computed value or error state
+     * @returns An AsyncFlowComputation containing the computed value or error state
      */
     protected compute(): AsyncFlowComputation<T> {
         this.epochCounter++;
@@ -165,29 +145,25 @@ export class AsyncComputedFlow<T>
         computation.setValue(state);
         this.onComputationStarted(computation);
 
-        const promise = tryPromise(() => this.getter(computation.getContext()));
-        promise.then(
-            (data) => {
-                computation.setValue({
-                    status: "success",
-                    data,
-                });
-                this.onComputationFinished(computation);
-            },
-            (error: unknown) => {
-                const state = this.handleComputationError(error);
-                computation.setValue(state);
-                this.onComputationFinished(computation);
-            },
-        );
+        this.computeAsync(computation);
 
         return computation;
     }
 
     /**
-     * Handles computation errors and returns the appropriate state.
+     * Abstract method that subclasses must implement to perform the actual async computation.
+     *
+     * @param computation - The computation context to use for the async operation
      */
-    private handleComputationError(error: unknown): AsyncFlowState<T> {
+    protected abstract computeAsync(computation: AsyncFlowComputation<T>): void;
+
+    /**
+     * Handles computation errors and returns the appropriate state.
+     *
+     * @param error - The error that occurred during computation
+     * @returns The appropriate AsyncFlowState for the error
+     */
+    protected handleComputationError(error: unknown): AsyncFlowState<T> {
         const lastValue = this.lastFinishedComputation?.getValue();
 
         if (isAbortError(error)) {
@@ -212,7 +188,7 @@ export class AsyncComputedFlow<T>
      *
      * @param computation - The newly started computation
      */
-    private onComputationStarted(computation: AsyncFlowComputation<T>): void {
+    protected onComputationStarted(computation: AsyncFlowComputation<T>): void {
         // This ensures that only the most recent computation continues, preventing race conditions.
         this.pendingComputation?.abort();
         this.pendingComputation = computation;

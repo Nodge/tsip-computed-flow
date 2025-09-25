@@ -4,7 +4,7 @@ import type { FlowComputationBase } from "./computation";
 /**
  * Internal subscription object that extends the public FlowSubscription interface.
  *
- * This interface is used internally by MutableFlowImpl to store both the public
+ * This interface is used internally by computed flow implementations to store both the public
  * unsubscribe method and the private listener function for each subscription.
  *
  * @internal
@@ -12,6 +12,7 @@ import type { FlowComputationBase } from "./computation";
 export interface Subscription extends FlowSubscription {
     /**
      * The listener function that will be called when the flow's value changes.
+     * @internal
      */
     listener: () => void;
 }
@@ -37,7 +38,7 @@ export interface Subscription extends FlowSubscription {
  * }
  * ```
  */
-export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputationBase<T>> {
+export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputationBase<T, unknown>> {
     /**
      * Reference to the last computation result, used for caching values.
      * This computation is not subscribed to sources and exists only for value caching.
@@ -70,9 +71,11 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
     /**
      * Subscribes to changes in the flow.
      *
-     * The listener function will be called synchronously whenever the flow's value changes
-     * via the {@link setState} method. The listener receives no parameters and
-     * should use {@link getSnapshot} to access the current value.
+     * The listener function will be called synchronously whenever the flow's value changes.
+     * The listener receives no parameters and should use {@link getSnapshot} to access the current value.
+     *
+     * When the first subscription is added, the flow will start tracking its source dependencies.
+     * When the last subscription is removed, the flow will stop tracking sources.
      *
      * @param listener - A callback function that will be invoked on value changes
      * @returns A subscription object that can be used to unsubscribe from changes
@@ -80,7 +83,7 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
      * @example
      * ```typescript
      * const sourceFlow = createFlow(0);
-     * const computedFlow = computed((ctx) => ctx.get(flow) * 2);
+     * const computedFlow = computed((ctx) => ctx.get(sourceFlow) * 2);
      *
      * const subscription = computedFlow.subscribe(() => {
      *   console.log('New value:', computedFlow.getSnapshot());

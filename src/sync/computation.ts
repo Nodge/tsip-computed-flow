@@ -46,34 +46,16 @@ export interface FlowComputationContext {
  *
  * @typeParam T - The type of value produced by this computation
  */
-export class FlowComputation<T> extends FlowComputationBase<T> {
+export class FlowComputation<T> extends FlowComputationBase<T, FlowComputationContext> {
     /**
-     * Creates and returns a computation contex.
+     * Creates and returns a computation context.
      *
      * @returns A context object
      */
     public getContext(): FlowComputationContext {
         return {
-            get: (flow) => {
-                // Register the flow as a dependency
-                this.addSource(flow);
-
-                try {
-                    const value = flow.getSnapshot();
-                    // Store the successful value for dependency tracking
-                    this.setSourceValue(flow, value);
-                    return value;
-                } catch (err) {
-                    // Store the error for dependency tracking
-                    this.setSourceError(flow, err);
-                    // Re-throw to maintain error propagation
-                    throw err;
-                }
-            },
-            skip() {
-                // Throw an abort signal to cancel the current computation
-                throw AbortSignal.abort().reason;
-            },
+            get: (flow) => this.readFlow(flow),
+            skip: () => this.skip(),
         };
     }
 }

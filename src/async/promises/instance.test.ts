@@ -1,37 +1,39 @@
 /* eslint-disable @typescript-eslint/require-await */
 import { createFlow, createAsyncFlow } from "@tsip/flow";
-import type { AsyncFlow, Flow } from "@tsip/types";
+import type { AsyncFlow, AsyncFlowState, Flow } from "@tsip/types";
 import { describe, it, expect, vi, expectTypeOf } from "vitest";
-import { AsyncComputedFlow } from "./instance";
+import { AsyncComputedPromiseFlow } from "./instance";
 
-describe("AsyncComputedFlow", () => {
+describe("AsyncComputedPromiseFlow", () => {
     describe("types", () => {
         it("should infer return type", () => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const flow1: AsyncFlow<string> = new AsyncComputedFlow(async () => "value");
+            const flow1: AsyncFlow<string> = new AsyncComputedPromiseFlow(async () => "value");
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const flow2: AsyncFlow<"const"> = new AsyncComputedFlow(async () => "const" as const);
+            const flow2: AsyncFlow<"const"> = new AsyncComputedPromiseFlow(async () => "const" as const);
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const flow3: AsyncFlow<number> = new AsyncComputedFlow(async () => 123);
+            const flow3: AsyncFlow<number> = new AsyncComputedPromiseFlow(async () => 123);
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const flow4: AsyncFlow<{ value: number }> = new AsyncComputedFlow(async () => ({ value: 123 }));
+            const flow4: AsyncFlow<{ value: number }> = new AsyncComputedPromiseFlow(async () => ({ value: 123 }));
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const flow5: AsyncFlow<undefined> = new AsyncComputedFlow(async () => undefined);
+            const flow5: AsyncFlow<undefined> = new AsyncComputedPromiseFlow(async () => undefined);
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const flow6: AsyncFlow<null> = new AsyncComputedFlow(async () => null);
+            const flow6: AsyncFlow<null> = new AsyncComputedPromiseFlow(async () => null);
 
             const source = createFlow(0);
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const flow7: AsyncFlow<number> = new AsyncComputedFlow(async ({ get }) => get(source));
+            const flow7: AsyncFlow<number> = new AsyncComputedPromiseFlow(async ({ get }) => get(source));
 
             const asyncSource = createAsyncFlow({ status: "success", data: 0 });
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const flow8: AsyncFlow<number> = new AsyncComputedFlow(async ({ getAsync }) => getAsync(asyncSource));
+            const flow8: AsyncFlow<number> = new AsyncComputedPromiseFlow(async ({ getAsync }) =>
+                getAsync(asyncSource),
+            );
         });
 
         it("should infer return type with skips", () => {
             const source = createAsyncFlow<"a" | "b">({ status: "pending" });
-            const flow = new AsyncComputedFlow(async ({ getAsync, skip }) => {
+            const flow = new AsyncComputedPromiseFlow(async ({ getAsync, skip }) => {
                 const value = await getAsync(source);
                 if (value === "a") {
                     return skip();
@@ -39,13 +41,13 @@ describe("AsyncComputedFlow", () => {
                 return value;
             });
 
-            expectTypeOf(flow).toEqualTypeOf<AsyncComputedFlow<"b">>();
+            expectTypeOf(flow).toEqualTypeOf<AsyncComputedPromiseFlow<"b">>();
         });
     });
 
     describe("basic functionality", () => {
         it("should compute and return asynchronous values", async () => {
-            const flow = new AsyncComputedFlow(async () => "const");
+            const flow = new AsyncComputedPromiseFlow(async () => "const");
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             await nextTick();
@@ -54,7 +56,7 @@ describe("AsyncComputedFlow", () => {
 
         it("should compute values based on sync dependencies", async () => {
             const source = createFlow(2);
-            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ get }) => get(source) * 2);
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             await nextTick();
@@ -64,7 +66,7 @@ describe("AsyncComputedFlow", () => {
         it("should compute values based on async dependencies", async () => {
             const source = createAsyncFlow<number>({ status: "pending" });
 
-            const flow = new AsyncComputedFlow(async ({ getAsync }) => (await getAsync(source)) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ getAsync }) => (await getAsync(source)) * 2);
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             await nextTick();
@@ -78,7 +80,7 @@ describe("AsyncComputedFlow", () => {
         it("should recompute when dependencies change", async () => {
             const source = createAsyncFlow<number>({ status: "success", data: 2 });
 
-            const flow = new AsyncComputedFlow(async ({ getAsync }) => (await getAsync(source)) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ getAsync }) => (await getAsync(source)) * 2);
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             await nextTick();
@@ -96,7 +98,7 @@ describe("AsyncComputedFlow", () => {
 
         it("should initialize with resolved async dependency", async () => {
             const source = createAsyncFlow<string>({ status: "success", data: "result" });
-            const flow = new AsyncComputedFlow(({ getAsync }) => getAsync(source));
+            const flow = new AsyncComputedPromiseFlow(({ getAsync }) => getAsync(source));
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             await nextTick();
@@ -106,39 +108,39 @@ describe("AsyncComputedFlow", () => {
 
     describe("getSnapshot behavior", () => {
         it("should emit success state when promise resolves", async () => {
-            const { promise, resolve } = Promise.withResolvers();
-            const flow = new AsyncComputedFlow(() => promise);
+            const asyncFlow = createAsyncFlow<string>({ status: "pending" });
+            const flow = new AsyncComputedPromiseFlow(({ getAsync }) => getAsync(asyncFlow));
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
-            resolve("resolved data");
-            await promise;
+            asyncFlow.emit({ status: "success", data: "resolved data" });
+            await nextTick();
 
             expect(flow.getSnapshot()).toEqual({ status: "success", data: "resolved data" });
         });
 
         it("should emit error state when promise rejects", async () => {
-            const { promise, reject } = Promise.withResolvers();
+            const asyncFlow = createAsyncFlow<string>({ status: "pending" });
 
-            const flow = new AsyncComputedFlow(() => promise);
+            const flow = new AsyncComputedPromiseFlow(({ getAsync }) => getAsync(asyncFlow));
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             const error = new Error("test error");
-            reject(error);
-            await expect(promise).rejects.toBe(error);
+            asyncFlow.emit({ status: "error", error });
+            await nextTick();
 
             expect(flow.getSnapshot()).toEqual({ status: "error", error, data: undefined });
         });
 
         it("should preserve previous data in pending state", async () => {
             const source = createFlow(1);
-            const { promise, resolve } = Promise.withResolvers();
+            const asyncFlow = createAsyncFlow<string>({ status: "pending" });
 
-            const flow = new AsyncComputedFlow(async ({ get }) => {
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync }) => {
                 const value = get(source);
                 if (value === 1) {
                     return "initial data";
                 }
-                return promise;
+                return getAsync(asyncFlow);
             });
 
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: undefined });
@@ -156,7 +158,7 @@ describe("AsyncComputedFlow", () => {
                 data: "initial data",
             });
 
-            resolve("new data");
+            asyncFlow.emit({ status: "success", data: "new data" });
             await nextTick();
 
             expect(flow.getSnapshot()).toEqual({ status: "success", data: "new data" });
@@ -164,14 +166,14 @@ describe("AsyncComputedFlow", () => {
 
         it("should preserve previous data in error state", async () => {
             const source = createFlow(1);
-            const { promise, reject } = Promise.withResolvers();
+            const asyncFlow = createAsyncFlow<string>({ status: "pending" });
 
-            const flow = new AsyncComputedFlow(async ({ get }) => {
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync }) => {
                 const value = get(source);
                 if (value === 1) {
                     return "initial data";
                 }
-                return promise;
+                return getAsync(asyncFlow);
             });
 
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: undefined });
@@ -191,7 +193,7 @@ describe("AsyncComputedFlow", () => {
 
             // Reject the promise
             const error = new Error("test error");
-            reject(error);
+            asyncFlow.emit({ status: "error", error });
 
             await nextTick();
 
@@ -212,30 +214,30 @@ describe("AsyncComputedFlow", () => {
             //  R1  |
             //      |
             //      R2
-            const source = createFlow(Promise.resolve(0));
+            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
 
-            const flow = new AsyncComputedFlow(async ({ get }) => await get(source));
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync }) => await getAsync(get(source)));
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
 
             // start first computation (C1)
-            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            source.emit(p1);
+            const c1 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            source.emit(p2);
+            const c2 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish first computation
-            r1(1);
+            c1.emit({ status: "success", data: 1 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 1 });
 
             // finish second computation
-            r2(2);
+            c2.emit({ status: "success", data: 2 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 2 });
         });
@@ -246,31 +248,31 @@ describe("AsyncComputedFlow", () => {
             //  |   |
             //  |   R2
             //  R1
-            const source = createFlow(Promise.resolve(0));
+            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
 
-            const flow = new AsyncComputedFlow(async ({ get }) => await get(source));
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync }) => await getAsync(get(source)));
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
 
             // start first computation (C1)
-            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            source.emit(p1);
+            const c1 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            source.emit(p2);
+            const c2 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish second computation
-            r2(2);
+            c2.emit({ status: "success", data: 2 });
             await nextTick();
             const value1 = flow.getSnapshot();
             expect(value1).toEqual({ status: "success", data: 2 });
 
             // finish first computation
-            r1(1);
+            c1.emit({ status: "success", data: 1 });
             await nextTick();
             const value2 = flow.getSnapshot();
             expect(value2).toEqual({ status: "success", data: 2 });
@@ -278,36 +280,36 @@ describe("AsyncComputedFlow", () => {
         });
 
         it("should abort previous computation on new computation start", async () => {
-            const source = createFlow(Promise.resolve(0));
+            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
             const signals: AbortSignal[] = [];
 
-            const flow = new AsyncComputedFlow(async ({ get, signal }) => {
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync, signal }) => {
                 signals.push(signal);
-                return await get(source);
+                return await getAsync(get(source));
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
 
             // start first computation
-            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            source.emit(p1);
+            const c1 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(signals).toHaveLength(2);
             expect(signals[0]?.aborted).toBe(true);
             expect(signals[1]?.aborted).toBe(false);
 
             // start second computation
-            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            source.emit(p2);
+            const c2 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(signals).toHaveLength(3);
             expect(signals[0]?.aborted).toBe(true);
             expect(signals[1]?.aborted).toBe(true);
             expect(signals[2]?.aborted).toBe(false);
 
-            r1(1);
-            r2(2);
+            c1.emit({ status: "success", data: 1 });
+            c2.emit({ status: "success", data: 2 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 2 });
             expect(signals).toHaveLength(3);
@@ -323,10 +325,10 @@ describe("AsyncComputedFlow", () => {
             //  R1  |
             //      |
             //      R2
-            const source = createFlow(Promise.resolve(0));
+            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
 
-            const flow = new AsyncComputedFlow(async ({ get, signal }) => {
-                const value = await get(source);
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync, signal }) => {
+                const value = await getAsync(get(source));
                 signal.throwIfAborted();
                 return value;
             });
@@ -335,22 +337,22 @@ describe("AsyncComputedFlow", () => {
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
 
             // start first computation (C1)
-            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            source.emit(p1);
+            const c1 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            source.emit(p2);
+            const c2 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish first computation
-            r1(1);
+            c1.emit({ status: "success", data: 1 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish second computation
-            r2(2);
+            c2.emit({ status: "success", data: 2 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 2 });
         });
@@ -361,10 +363,10 @@ describe("AsyncComputedFlow", () => {
             //  |   |
             //  |   R2
             //  R1
-            const source = createFlow(Promise.resolve(0));
+            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
 
-            const flow = new AsyncComputedFlow(async ({ get, signal }) => {
-                const value = await get(source);
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync, signal }) => {
+                const value = await getAsync(get(source));
                 signal.throwIfAborted();
                 return value;
             });
@@ -373,23 +375,23 @@ describe("AsyncComputedFlow", () => {
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
 
             // start first computation (C1)
-            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            source.emit(p1);
+            const c1 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            source.emit(p2);
+            const c2 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish second computation
-            r2(2);
+            c2.emit({ status: "success", data: 2 });
             await nextTick();
             const value1 = flow.getSnapshot();
             expect(value1).toEqual({ status: "success", data: 2 });
 
             // finish first computation
-            r1(1);
+            c1.emit({ status: "success", data: 1 });
             await nextTick();
             const value2 = flow.getSnapshot();
             expect(value2).toEqual({ status: "success", data: 2 });
@@ -403,40 +405,40 @@ describe("AsyncComputedFlow", () => {
             //  |   R2  |
             //  R1      |
             //          R3
-            const source = createFlow(Promise.resolve(0));
+            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
 
-            const flow = new AsyncComputedFlow(async ({ get }) => await get(source));
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync }) => await getAsync(get(source)));
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
 
             // start first computation (C1)
-            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            source.emit(p1);
+            const c1 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            source.emit(p2);
+            const c2 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start third computation (C3)
-            const { promise: p3, resolve: r3 } = Promise.withResolvers<number>();
-            source.emit(p3);
+            const c3 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c3);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish second computation
-            r2(2);
+            c2.emit({ status: "success", data: 2 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 2 });
 
             // finish first computation
-            r1(1);
+            c1.emit({ status: "success", data: 1 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 2 });
 
             // finish third computation
-            r3(3);
+            c3.emit({ status: "success", data: 3 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 3 });
         });
@@ -453,7 +455,9 @@ describe("AsyncComputedFlow", () => {
             const s1 = createAsyncFlow<string>({ status: "success", data: "R0" });
             const s2 = createAsyncFlow<string>({ status: "success", data: "R0" });
 
-            const flow = new AsyncComputedFlow(async ({ getAsync }) => await Promise.all([getAsync(s1), getAsync(s2)]));
+            const flow = new AsyncComputedPromiseFlow(
+                async ({ getAsync }) => await Promise.all([getAsync(s1), getAsync(s2)]),
+            );
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             await nextTick();
@@ -491,7 +495,7 @@ describe("AsyncComputedFlow", () => {
     describe("compute error handling", () => {
         it("should handle exceptions and propagate errors via getSnapshot", async () => {
             const error = new Error("test");
-            const flow = new AsyncComputedFlow<unknown>(() => {
+            const flow = new AsyncComputedPromiseFlow<unknown>(() => {
                 throw error;
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
@@ -502,7 +506,7 @@ describe("AsyncComputedFlow", () => {
 
         it("should handle promise rejections and propagate errors via getSnapshot", async () => {
             const error = new Error("test");
-            const flow = new AsyncComputedFlow<unknown>(() => {
+            const flow = new AsyncComputedPromiseFlow<unknown>(() => {
                 return Promise.reject(error);
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
@@ -518,7 +522,7 @@ describe("AsyncComputedFlow", () => {
                 throw error;
             };
 
-            const flow = new AsyncComputedFlow<unknown>(async ({ get }) => {
+            const flow = new AsyncComputedPromiseFlow<unknown>(async ({ get }) => {
                 return get(source);
             });
             flow.subscribe(vi.fn());
@@ -533,7 +537,7 @@ describe("AsyncComputedFlow", () => {
             const error = new Error("test");
             const source = createAsyncFlow({ status: "error", error });
 
-            const flow = new AsyncComputedFlow<unknown>(async ({ getAsync }) => {
+            const flow = new AsyncComputedPromiseFlow<unknown>(async ({ getAsync }) => {
                 return getAsync(source);
             });
             flow.subscribe(vi.fn());
@@ -547,37 +551,37 @@ describe("AsyncComputedFlow", () => {
 
     describe("skip behavior", () => {
         it("should provide skip() method to abort computation", async () => {
-            const source = createFlow(1);
-            const flow = new AsyncComputedFlow(async ({ get, skip }) => {
-                const value = get(source);
+            const source = createAsyncFlow({ status: "success", data: 1 });
+            const flow = new AsyncComputedPromiseFlow(async ({ getAsync, skip }) => {
+                const value = await getAsync(source);
                 if (value % 2 === 0) {
                     skip();
                 }
                 return { value };
             });
 
-            expectTypeOf(flow).toEqualTypeOf<AsyncComputedFlow<{ value: number }>>();
+            expectTypeOf(flow).toEqualTypeOf<AsyncComputedPromiseFlow<{ value: number }>>();
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             await nextTick();
             const value1 = flow.getSnapshot();
             expect(value1).toEqual({ status: "success", data: { value: 1 } });
 
-            source.emit(2);
+            source.emit({ status: "success", data: 2 });
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: { value: 1 } });
             await nextTick();
             const value2 = flow.getSnapshot();
             expect(value2).toEqual({ status: "success", data: { value: 1 } });
             expect(value2).toBe(value1);
 
-            source.emit(3);
+            source.emit({ status: "success", data: 3 });
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: { value: 1 } });
             await nextTick();
             const value3 = flow.getSnapshot();
             expect(value3).toEqual({ status: "success", data: { value: 3 } });
             expect(value3).not.toBe(value2);
 
-            source.emit(4);
+            source.emit({ status: "success", data: 4 });
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: { value: 3 } });
             await nextTick();
             const value4 = flow.getSnapshot();
@@ -586,10 +590,10 @@ describe("AsyncComputedFlow", () => {
         });
 
         it("should return initial value if first computation was skipped", async () => {
-            const source = createFlow(0);
-            const flow = new AsyncComputedFlow(
-                async ({ get, skip }) => {
-                    const value = get(source);
+            const source = createAsyncFlow({ status: "success", data: 0 });
+            const flow = new AsyncComputedPromiseFlow(
+                async ({ getAsync, skip }) => {
+                    const value = await getAsync(source);
                     if (value % 2 === 0) {
                         skip();
                     }
@@ -598,33 +602,33 @@ describe("AsyncComputedFlow", () => {
                 { initialValue: { status: "success", data: -1 } },
             );
 
-            expectTypeOf(flow).toEqualTypeOf<AsyncComputedFlow<number>>();
+            expectTypeOf(flow).toEqualTypeOf<AsyncComputedPromiseFlow<number>>();
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: -1 });
 
-            source.emit(1);
+            source.emit({ status: "success", data: 1 });
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: -1 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 1 });
 
-            source.emit(2);
+            source.emit({ status: "success", data: 2 });
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 1 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 1 });
 
-            source.emit(3);
+            source.emit({ status: "success", data: 3 });
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 1 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 3 });
         });
 
         it("should accept different types in getter and initialValue", async () => {
-            const source = createFlow(0);
-            const flow = new AsyncComputedFlow<number | "skip">(
-                async ({ get, skip }) => {
-                    const value = get(source);
+            const source = createAsyncFlow({ status: "success", data: 0 });
+            const flow = new AsyncComputedPromiseFlow<number | "skip">(
+                async ({ getAsync, skip }) => {
+                    const value = await getAsync(source);
                     if (value % 2 === 0) {
                         skip();
                     }
@@ -633,32 +637,32 @@ describe("AsyncComputedFlow", () => {
                 { initialValue: { status: "success", data: "skip" } },
             );
 
-            expectTypeOf(flow).toEqualTypeOf<AsyncComputedFlow<number | "skip">>();
+            expectTypeOf(flow).toEqualTypeOf<AsyncComputedPromiseFlow<number | "skip">>();
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: "skip" });
 
-            source.emit(1);
+            source.emit({ status: "success", data: 1 });
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: "skip" });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 1 });
 
-            source.emit(2);
+            source.emit({ status: "success", data: 2 });
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 1 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 1 });
 
-            source.emit(3);
+            source.emit({ status: "success", data: 3 });
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 1 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 3 });
         });
 
         it("should throw error if first computation was skipped and initial value was not set", async () => {
-            const source = createFlow(0);
-            const flow = new AsyncComputedFlow(async ({ get, skip }) => {
-                const value = get(source);
+            const source = createAsyncFlow({ status: "success", data: 0 });
+            const flow = new AsyncComputedPromiseFlow(async ({ getAsync, skip }) => {
+                const value = await getAsync(source);
                 if (value % 2 === 0) {
                     skip();
                 }
@@ -678,8 +682,8 @@ describe("AsyncComputedFlow", () => {
 
     describe("subscription behavior", () => {
         it("should notify subscribers on deps change", async () => {
-            const source = createFlow(1);
-            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+            const source = createAsyncFlow({ status: "success", data: 1 });
+            const flow = new AsyncComputedPromiseFlow(async ({ getAsync }) => (await getAsync(source)) * 2);
             const listener = vi.fn();
 
             flow.subscribe(listener);
@@ -689,7 +693,7 @@ describe("AsyncComputedFlow", () => {
             expect(listener).toHaveBeenCalledTimes(1); // pending->success transition
 
             flow.getSnapshot();
-            source.emit(3);
+            source.emit({ status: "success", data: 3 });
             expect(listener).toHaveBeenCalledTimes(2); // success->pending transition
 
             flow.getSnapshot();
@@ -698,7 +702,7 @@ describe("AsyncComputedFlow", () => {
         });
 
         it("should notify subscribers about computation error", async () => {
-            const flow = new AsyncComputedFlow(async () => {
+            const flow = new AsyncComputedPromiseFlow(async () => {
                 throw new Error();
             });
             const listener = vi.fn();
@@ -711,8 +715,8 @@ describe("AsyncComputedFlow", () => {
         });
 
         it("should notify at most once between getSnapshot calls", async () => {
-            const source = createFlow(1);
-            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+            const source = createAsyncFlow({ status: "success", data: 1 });
+            const flow = new AsyncComputedPromiseFlow(async ({ getAsync }) => (await getAsync(source)) * 2);
             const listener = vi.fn();
 
             flow.subscribe(listener);
@@ -721,16 +725,16 @@ describe("AsyncComputedFlow", () => {
             await nextTick();
             expect(listener).toHaveBeenCalledTimes(1); // pending->success transition
 
-            source.emit(3);
+            source.emit({ status: "success", data: 3 });
             await nextTick();
             expect(listener).toHaveBeenCalledTimes(1);
 
-            source.emit(4);
+            source.emit({ status: "success", data: 4 });
             await nextTick();
             expect(listener).toHaveBeenCalledTimes(1);
 
             flow.getSnapshot();
-            source.emit(5);
+            source.emit({ status: "success", data: 5 });
             await nextTick();
             expect(listener).toHaveBeenCalledTimes(2);
         });
@@ -742,8 +746,8 @@ describe("AsyncComputedFlow", () => {
             //  R1  |
             //      |
             //      R2
-            const source = createFlow(Promise.resolve(0));
-            const flow = new AsyncComputedFlow(async ({ get }) => await get(source));
+            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync }) => await getAsync(get(source)));
 
             const listener = vi.fn();
             flow.subscribe(listener);
@@ -752,25 +756,25 @@ describe("AsyncComputedFlow", () => {
             expect(listener).toHaveBeenCalledTimes(1); // pending->success transition
 
             // start first computation (C1)
-            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            source.emit(p1);
+            const c1 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(2); // success->pending transition
 
             // start second computation (C2)
-            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            source.emit(p2);
+            const c2 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
 
             // finish first computation
-            r1(1);
+            c1.emit({ status: "success", data: 1 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 1 });
             expect(listener).toHaveBeenCalledTimes(4); // pending data update
 
             // finish second computation
-            r2(2);
+            c2.emit({ status: "success", data: 2 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 2 });
             expect(listener).toHaveBeenCalledTimes(5); // pending->success transition
@@ -782,8 +786,8 @@ describe("AsyncComputedFlow", () => {
             //  |   |
             //  |   R2
             //  R1
-            const source = createFlow(Promise.resolve(0));
-            const flow = new AsyncComputedFlow(async ({ get }) => await get(source));
+            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync }) => await getAsync(get(source)));
 
             const listener = vi.fn();
             flow.subscribe(listener);
@@ -792,26 +796,26 @@ describe("AsyncComputedFlow", () => {
             expect(listener).toHaveBeenCalledTimes(1); // pending->success transition
 
             // start first computation (C1)
-            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            source.emit(p1);
+            const c1 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(2); // success->pending transition
 
             // start second computation (C2)
-            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            source.emit(p2);
+            const c2 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
 
             // finish second computation
-            r2(2);
+            c2.emit({ status: "success", data: 2 });
             await nextTick();
             const value1 = flow.getSnapshot();
             expect(value1).toEqual({ status: "success", data: 2 });
             expect(listener).toHaveBeenCalledTimes(4); // pending->success transition
 
             // finish first computation
-            r1(1);
+            c1.emit({ status: "success", data: 1 });
             await nextTick();
             const value2 = flow.getSnapshot();
             expect(value2).toEqual({ status: "success", data: 2 });
@@ -826,10 +830,10 @@ describe("AsyncComputedFlow", () => {
             //  R1  |
             //      |
             //      R2
-            const source = createFlow(Promise.resolve(0));
+            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
 
-            const flow = new AsyncComputedFlow(async ({ get, signal }) => {
-                const value = await get(source);
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync, signal }) => {
+                const value = await getAsync(get(source));
                 signal.throwIfAborted();
                 return value;
             });
@@ -840,25 +844,25 @@ describe("AsyncComputedFlow", () => {
             expect(listener).toHaveBeenCalledTimes(1); // pending->success transition
 
             // start first computation (C1)
-            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            source.emit(p1);
+            const c1 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(2); // success->pending transition
 
             // start second computation (C2)
-            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            source.emit(p2);
+            const c2 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
 
             // finish first computation
-            r1(1);
+            c1.emit({ status: "success", data: 1 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(4); // aborted computation, the status may have changed
 
             // finish second computation
-            r2(2);
+            c2.emit({ status: "success", data: 2 });
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 2 });
             expect(listener).toHaveBeenCalledTimes(5); // pending->success transition
@@ -870,10 +874,10 @@ describe("AsyncComputedFlow", () => {
             //  |   |
             //  |   R2
             //  R1
-            const source = createFlow(Promise.resolve(0));
+            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
 
-            const flow = new AsyncComputedFlow(async ({ get, signal }) => {
-                const value = await get(source);
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync, signal }) => {
+                const value = await getAsync(get(source));
                 signal.throwIfAborted();
                 return value;
             });
@@ -884,26 +888,26 @@ describe("AsyncComputedFlow", () => {
             expect(listener).toHaveBeenCalledTimes(1); // pending->success transition
 
             // start first computation (C1)
-            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            source.emit(p1);
+            const c1 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(2); // success->pending transition
 
             // start second computation (C2)
-            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            source.emit(p2);
+            const c2 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
 
             // finish second computation
-            r2(2);
+            c2.emit({ status: "success", data: 2 });
             await nextTick();
             const value1 = flow.getSnapshot();
             expect(value1).toEqual({ status: "success", data: 2 });
             expect(listener).toHaveBeenCalledTimes(4); // pending->success transition
 
             // finish first computation
-            r1(1);
+            c1.emit({ status: "success", data: 1 });
             await nextTick();
             const value2 = flow.getSnapshot();
             expect(value2).toEqual({ status: "success", data: 2 });
@@ -914,8 +918,8 @@ describe("AsyncComputedFlow", () => {
 
     describe("asPromise behavior", () => {
         it("should resolve for success state", async () => {
-            const source = createFlow(2);
-            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+            const source = createAsyncFlow({ status: "success", data: 2 });
+            const flow = new AsyncComputedPromiseFlow(async ({ getAsync }) => (await getAsync(source)) * 2);
 
             const promise = await flow.asPromise();
             expect(promise).toBe(4);
@@ -923,7 +927,7 @@ describe("AsyncComputedFlow", () => {
 
         it("should reject for error state", async () => {
             const error = new Error("test");
-            const flow = new AsyncComputedFlow(async () => {
+            const flow = new AsyncComputedPromiseFlow(async () => {
                 throw error;
             });
 
@@ -932,26 +936,25 @@ describe("AsyncComputedFlow", () => {
         });
 
         it("should wait for pending state to resolve", async () => {
-            const source = createFlow(Promise.resolve("initial"));
-            const flow = new AsyncComputedFlow(async ({ get }) => get(source));
+            const source = createFlow(createAsyncFlow<string>({ status: "success", data: "initial" }));
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync }) => getAsync(get(source)));
 
             await expect(flow.asPromise()).resolves.toBe("initial");
 
-            const { promise, resolve } = Promise.withResolvers<string>();
-            source.emit(promise);
+            const asyncFlow = createAsyncFlow<string>({ status: "pending" });
+            source.emit(asyncFlow);
 
-            const status = await Promise.race([promise, Promise.resolve("pending")]);
+            const status = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status).toBe("pending");
 
-            resolve("resolved");
+            asyncFlow.emit({ status: "success", data: "resolved" });
 
-            const status2 = await Promise.race([promise, Promise.resolve("pending")]);
-            expect(status2).toBe("resolved");
+            await expect(flow.asPromise()).resolves.toBe("resolved");
         });
 
         it("should return same promise during getter execution", async () => {
-            const source = createFlow(2);
-            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+            const source = createAsyncFlow({ status: "success", data: 2 });
+            const flow = new AsyncComputedPromiseFlow(async ({ getAsync }) => (await getAsync(source)) * 2);
 
             const p1 = flow.asPromise();
             const p2 = flow.asPromise();
@@ -963,36 +966,37 @@ describe("AsyncComputedFlow", () => {
         });
 
         it("should return same promise when cached value exists", async () => {
-            const source = createFlow(2);
-            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+            const value: AsyncFlowState<number> = { status: "success", data: 2 };
+            const source = createAsyncFlow(value);
+            const flow = new AsyncComputedPromiseFlow(async ({ getAsync }) => (await getAsync(source)) * 2);
 
             await expect(flow.asPromise()).resolves.toBe(4);
 
             const p1 = flow.asPromise();
-            source.emit(2);
+            source.emit(value);
             const p2 = flow.asPromise();
             expect(p1).toBe(p2);
         });
 
         it("should return new promise if sources changed", async () => {
-            const source = createFlow(2);
-            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+            const source = createAsyncFlow({ status: "success", data: 2 });
+            const flow = new AsyncComputedPromiseFlow(async ({ getAsync }) => (await getAsync(source)) * 2);
 
             await expect(flow.asPromise()).resolves.toBe(4);
 
             const p1 = flow.asPromise();
-            source.emit(3);
+            source.emit({ status: "success", data: 3 });
             const p2 = flow.asPromise();
             expect(p1).not.toBe(p2);
             await expect(p2).resolves.toBe(6);
         });
 
         it("should return new promise if sources changed during execution", async () => {
-            const source = createFlow(2);
-            const flow = new AsyncComputedFlow(async ({ get }) => get(source) * 2);
+            const source = createAsyncFlow({ status: "success", data: 2 });
+            const flow = new AsyncComputedPromiseFlow(async ({ getAsync }) => (await getAsync(source)) * 2);
 
             const p1 = flow.asPromise();
-            source.emit(3);
+            source.emit({ status: "success", data: 3 });
             const p2 = flow.asPromise();
             expect(p1).not.toBe(p2);
             await expect(p1).resolves.toBe(4);
@@ -1006,32 +1010,32 @@ describe("AsyncComputedFlow", () => {
             //  R1  |
             //      |
             //      R2
-            const source = createFlow(Promise.resolve(0));
-            const flow = new AsyncComputedFlow(async ({ get, signal }) => {
-                const value = await get(source);
+            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync, signal }) => {
+                const value = await getAsync(get(source));
                 signal.throwIfAborted();
                 return value;
             });
             await expect(flow.asPromise()).resolves.toBe(0);
 
             // start first computation (C1)
-            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            source.emit(p1);
+            const c1 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            source.emit(p2);
+            const c2 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish first computation
-            r1(1);
+            c1.emit({ status: "success", data: 1 });
             await nextTick();
             const status = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status).toBe("pending");
 
             // finish second computation
-            r2(2);
+            c2.emit({ status: "success", data: 2 });
             await nextTick();
             const status2 = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status2).toBe(2);
@@ -1043,32 +1047,32 @@ describe("AsyncComputedFlow", () => {
             //  |   |
             //  |   R2
             //  R1
-            const source = createFlow(Promise.resolve(0));
-            const flow = new AsyncComputedFlow(async ({ get, signal }) => {
-                const value = await get(source);
+            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
+            const flow = new AsyncComputedPromiseFlow(async ({ get, getAsync, signal }) => {
+                const value = await getAsync(get(source));
                 signal.throwIfAborted();
                 return value;
             });
             await expect(flow.asPromise()).resolves.toBe(0);
 
             // start first computation (C1)
-            const { promise: p1, resolve: r1 } = Promise.withResolvers<number>();
-            source.emit(p1);
+            const c1 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const { promise: p2, resolve: r2 } = Promise.withResolvers<number>();
-            source.emit(p2);
+            const c2 = createAsyncFlow<number>({ status: "pending" });
+            source.emit(c2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish second computation
-            r2(2);
+            c2.emit({ status: "success", data: 2 });
             await nextTick();
             const status = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status).toBe(2);
 
             // finish first computation
-            r1(1);
+            c1.emit({ status: "success", data: 1 });
             await nextTick();
             const status2 = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status2).toBe(2);

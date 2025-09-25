@@ -79,8 +79,8 @@ export class ComputedFlow<T> extends ComputedFlowBase<T, FlowComputation<T>> imp
     /**
      * Creates a new ComputedFlow instance.
      *
-     * @param getter - The function that computes the flow's value.
-     * @param options - Optional configuration for this computed flow.
+     * @param getter - The function that computes the flow's value
+     * @param options - Optional configuration for this computed flow
      */
     public constructor(getter: ComputedFlowGetter<T>, options?: ComputedFlowOptions<T>) {
         super();

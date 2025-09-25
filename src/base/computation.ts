@@ -11,8 +11,10 @@ type SourceCachedValue = { type: "success"; value: unknown } | { type: "error"; 
  * subscriptions, and cached values.
  *
  * @typeParam T - The type of value this computation produces
+ * @typeParam C - The type of context for computation function
  */
-export abstract class FlowComputationBase<T> {
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
+export abstract class FlowComputationBase<T, C> {
     /** Set of flows that this computation depends on */
     private sources = new Set<Flow<unknown>>();
 
@@ -185,5 +187,51 @@ export abstract class FlowComputationBase<T> {
             }
         }
         return false;
+    }
+
+    /**
+     * Creates and returns the computation context for this flow computation.
+     *
+     * The context typically includes methods for reading flow values and controlling
+     * computation execution.
+     *
+     * @returns The computation context object
+     */
+    public abstract getContext(): C;
+
+    /**
+     * Reads the current value from a flow and establishes it as a dependency.
+     *
+     * @typeParam T - The type of value the flow produces
+     * @param flow - The flow to read from
+     * @returns The current value of the flow
+     * @throws The flow's error if it's in an error state
+     */
+    protected readFlow<T>(flow: Flow<T>): T {
+        // Register the flow as a dependency
+        this.addSource(flow);
+
+        try {
+            const value = flow.getSnapshot();
+            // Store the successful value for dependency tracking
+            this.setSourceValue(flow, value);
+            return value;
+        } catch (err) {
+            // Store the error for dependency tracking
+            this.setSourceError(flow, err);
+            // Re-throw to maintain error propagation
+            throw err;
+        }
+    }
+
+    /**
+     * Cancels the current computation by throwing an abort signal.
+     *
+     * @returns Never returns - always throws to abort computation
+     * @throws Always throws an abort signal to cancel the computation
+     */
+    protected skip(): never {
+        // Throw an abort signal to cancel the current computation
+        throw AbortSignal.abort().reason;
     }
 }
