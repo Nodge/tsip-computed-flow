@@ -1676,9 +1676,36 @@ describe("ComputedFlow", () => {
     });
 
     describe("side effects detection", () => {
-        // side effects in getter
-        // reading in notify
-        it("");
+        it("should detect side effects inside getter", () => {
+            const source = createFlow(0);
+            const flow = new ComputedFlow((ctx) => {
+                const value = ctx.get(source);
+                if (value < 5) {
+                    source.emit(value + 1);
+                }
+                return value;
+            });
+
+            // todo: should throw
+            expect(flow.getSnapshot()).toBe(0);
+        });
+
+        it("should detect side-effects inside listeners", () => {
+            const source = createFlow(0);
+            const flow = new ComputedFlow((ctx) => {
+                return ctx.get(source);
+            });
+
+            flow.subscribe(() => {
+                const value = source.getSnapshot();
+                if (value < 5) {
+                    source.emit(value + 1);
+                }
+            });
+
+            // todo: should throw
+            expect(flow.getSnapshot()).toBe(0);
+        });
     });
 
     describe("cycles detection", () => {

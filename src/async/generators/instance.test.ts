@@ -1394,7 +1394,6 @@ describe("AsyncComputedGeneratorFlow", () => {
 });
 
 async function nextTick() {
-    // await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise<void>((resolve) => {
         queueMicrotask(resolve);
     });
