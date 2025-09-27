@@ -234,4 +234,19 @@ export abstract class FlowComputationBase<T, C> {
         // Throw an abort signal to cancel the current computation
         throw AbortSignal.abort().reason;
     }
+
+    /**
+     * Updates the cached values of all source dependencies,
+     * ensuring that subsequent change detection operations work correctly.
+     * It's typically called after a computation is reverted.
+     */
+    public updateSourcesValue(): void {
+        for (const source of this.sources) {
+            try {
+                this.readFlow(source);
+            } catch {
+                // do nothing
+            }
+        }
+    }
 }

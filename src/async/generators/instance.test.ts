@@ -259,32 +259,34 @@ describe("AsyncComputedGeneratorFlow", () => {
             //  R1  |
             //      |
             //      R2
-            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync }) {
-                return yield* getAsync(get(source));
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
+                return value;
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
+            resolvers[0]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
 
             // start first computation (C1)
-            const c1 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c1);
+            source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const c2 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c2);
+            source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish first computation
-            c1.emit({ status: "success", data: 1 });
+            resolvers[1]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 1 });
 
             // finish second computation
-            c2.emit({ status: "success", data: 2 });
+            resolvers[2]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 2 });
         });
@@ -295,33 +297,35 @@ describe("AsyncComputedGeneratorFlow", () => {
             //  |   |
             //  |   R2
             //  R1
-            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync }) {
-                return yield* getAsync(get(source));
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
+                return value;
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
+            resolvers[0]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
 
             // start first computation (C1)
-            const c1 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c1);
+            source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const c2 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c2);
+            source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish second computation
-            c2.emit({ status: "success", data: 2 });
+            resolvers[2]?.();
             await nextTick();
             const value1 = flow.getSnapshot();
             expect(value1).toEqual({ status: "success", data: 2 });
 
             // finish first computation
-            c1.emit({ status: "success", data: 1 });
+            resolvers[1]?.();
             await nextTick();
             const value2 = flow.getSnapshot();
             expect(value2).toEqual({ status: "success", data: 2 });
@@ -329,36 +333,38 @@ describe("AsyncComputedGeneratorFlow", () => {
         });
 
         it("should abort previous computation on new computation start", async () => {
-            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
             const signals: AbortSignal[] = [];
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync, signal }) {
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get, signal }) {
+                const value = get(source);
                 signals.push(signal);
-                return yield* getAsync(get(source));
+                yield new Promise<void>((r) => resolvers.push(r));
+                return value;
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
+            resolvers[0]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
 
             // start first computation
-            const c1 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c1);
+            source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(signals).toHaveLength(2);
             expect(signals[0]?.aborted).toBe(true);
             expect(signals[1]?.aborted).toBe(false);
 
             // start second computation
-            const c2 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c2);
+            source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(signals).toHaveLength(3);
             expect(signals[0]?.aborted).toBe(true);
             expect(signals[1]?.aborted).toBe(true);
             expect(signals[2]?.aborted).toBe(false);
 
-            c1.emit({ status: "success", data: 1 });
-            c2.emit({ status: "success", data: 2 });
+            resolvers[1]?.();
+            resolvers[2]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 2 });
             expect(signals).toHaveLength(3);
@@ -374,34 +380,35 @@ describe("AsyncComputedGeneratorFlow", () => {
             //  R1  |
             //      |
             //      R2
-            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync, signal }) {
-                const value = yield* getAsync(get(source));
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get, signal }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
                 signal.throwIfAborted();
                 return value;
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
+            resolvers[0]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
 
             // start first computation (C1)
-            const c1 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c1);
+            source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const c2 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c2);
+            source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish first computation
-            c1.emit({ status: "success", data: 1 });
+            resolvers[1]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish second computation
-            c2.emit({ status: "success", data: 2 });
+            resolvers[2]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 2 });
         });
@@ -412,35 +419,36 @@ describe("AsyncComputedGeneratorFlow", () => {
             //  |   |
             //  |   R2
             //  R1
-            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync, signal }) {
-                const value = yield* getAsync(get(source));
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get, signal }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
                 signal.throwIfAborted();
                 return value;
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
+            resolvers[0]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
 
             // start first computation (C1)
-            const c1 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c1);
+            source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const c2 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c2);
+            source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish second computation
-            c2.emit({ status: "success", data: 2 });
+            resolvers[2]?.();
             await nextTick();
             const value1 = flow.getSnapshot();
             expect(value1).toEqual({ status: "success", data: 2 });
 
             // finish first computation
-            c1.emit({ status: "success", data: 1 });
+            resolvers[1]?.();
             await nextTick();
             const value2 = flow.getSnapshot();
             expect(value2).toEqual({ status: "success", data: 2 });
@@ -454,42 +462,43 @@ describe("AsyncComputedGeneratorFlow", () => {
             //  |   R2  |
             //  R1      |
             //          R3
-            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync }) {
-                return yield* getAsync(get(source));
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
+                return value;
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
+            resolvers[0]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
 
             // start first computation (C1)
-            const c1 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c1);
+            source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const c2 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c2);
+            source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start third computation (C3)
-            const c3 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c3);
+            source.emit(3);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish second computation
-            c2.emit({ status: "success", data: 2 });
+            resolvers[2]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 2 });
 
             // finish first computation
-            c1.emit({ status: "success", data: 1 });
+            resolvers[1]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 2 });
 
             // finish third computation
-            c3.emit({ status: "success", data: 3 });
+            resolvers[3]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 3 });
         });
@@ -818,6 +827,15 @@ describe("AsyncComputedGeneratorFlow", () => {
             expect(flow.getSnapshot()).toEqual({ status: "error", error });
             expect(getSubscriptionsCount(source)).toBe(1);
         });
+
+        it("should handle exception in synchronoues part of getter", () => {
+            const error = new Error("test");
+            const flow = new AsyncComputedGeneratorFlow<unknown>(function* () {
+                throw error;
+            });
+            flow.subscribe(vi.fn());
+            expect(flow.getSnapshot()).toEqual({ status: "error", error });
+        });
     });
 
     describe("skip behavior", () => {
@@ -949,6 +967,78 @@ describe("AsyncComputedGeneratorFlow", () => {
                 error: AbortSignal.abort().reason,
             });
         });
+
+        it("should handle skip in synchronous part of getter", () => {
+            const source = createFlow(1);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get, skip }) {
+                const value = get(source);
+                if (value % 2 === 0) {
+                    skip();
+                }
+                return { value };
+            });
+
+            expectTypeOf(flow).toEqualTypeOf<AsyncComputedGeneratorFlow<{ value: number }>>();
+
+            const value1 = flow.getSnapshot();
+            expect(value1).toEqual({ status: "success", data: { value: 1 } });
+
+            source.emit(2);
+            const value2 = flow.getSnapshot();
+            expect(value2).toEqual({ status: "success", data: { value: 1 } });
+            expect(value2).toBe(value1);
+
+            source.emit(3);
+            const value3 = flow.getSnapshot();
+            expect(value3).toEqual({ status: "success", data: { value: 3 } });
+            expect(value3).not.toBe(value2);
+
+            source.emit(4);
+            const value4 = flow.getSnapshot();
+            expect(value4).toEqual({ status: "success", data: { value: 3 } });
+            expect(value4).toBe(value3);
+        });
+
+        it("should re-compute after skipped computation", () => {
+            const skipSource = createFlow(false);
+            const source = createFlow(0);
+            const getSnapshot = vi.fn();
+
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get, skip }) {
+                getSnapshot();
+                if (get(skipSource)) {
+                    skip();
+                }
+                return get(source);
+            });
+
+            const listener = vi.fn();
+            flow.subscribe(listener);
+
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
+            expect(listener).toHaveBeenCalledTimes(0);
+            expect(getSnapshot).toHaveBeenCalledTimes(1);
+
+            skipSource.emit(true);
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
+            expect(listener).toHaveBeenCalledTimes(1);
+            expect(getSnapshot).toHaveBeenCalledTimes(2);
+
+            source.emit(1);
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
+            expect(listener).toHaveBeenCalledTimes(2);
+            expect(getSnapshot).toHaveBeenCalledTimes(3);
+
+            skipSource.emit(false);
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 1 });
+            expect(listener).toHaveBeenCalledTimes(3);
+            expect(getSnapshot).toHaveBeenCalledTimes(4);
+
+            source.emit(2);
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 2 });
+            expect(listener).toHaveBeenCalledTimes(4);
+            expect(getSnapshot).toHaveBeenCalledTimes(5);
+        });
     });
 
     describe("subscription behavior", () => {
@@ -1022,37 +1112,39 @@ describe("AsyncComputedGeneratorFlow", () => {
             //  R1  |
             //      |
             //      R2
-            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync }) {
-                return yield* getAsync(get(source));
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
+                return value;
             });
 
             const listener = vi.fn();
             flow.subscribe(listener);
+            resolvers[0]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
             expect(listener).toHaveBeenCalledTimes(1); // pending->success transition
 
             // start first computation (C1)
-            const c1 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c1);
+            source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(2); // success->pending transition
 
             // start second computation (C2)
-            const c2 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c2);
+            source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
 
             // finish first computation
-            c1.emit({ status: "success", data: 1 });
+            resolvers[1]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 1 });
             expect(listener).toHaveBeenCalledTimes(4); // pending data update
 
             // finish second computation
-            c2.emit({ status: "success", data: 2 });
+            resolvers[2]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 2 });
             expect(listener).toHaveBeenCalledTimes(5); // pending->success transition
@@ -1064,38 +1156,40 @@ describe("AsyncComputedGeneratorFlow", () => {
             //  |   |
             //  |   R2
             //  R1
-            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync }) {
-                return yield* getAsync(get(source));
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
+                return value;
             });
 
             const listener = vi.fn();
             flow.subscribe(listener);
+            resolvers[0]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
             expect(listener).toHaveBeenCalledTimes(1); // pending->success transition
 
             // start first computation (C1)
-            const c1 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c1);
+            source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(2); // success->pending transition
 
             // start second computation (C2)
-            const c2 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c2);
+            source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
 
             // finish second computation
-            c2.emit({ status: "success", data: 2 });
+            resolvers[2]?.();
             await nextTick();
             const value1 = flow.getSnapshot();
             expect(value1).toEqual({ status: "success", data: 2 });
             expect(listener).toHaveBeenCalledTimes(4); // pending->success transition
 
             // finish first computation
-            c1.emit({ status: "success", data: 1 });
+            resolvers[1]?.();
             await nextTick();
             const value2 = flow.getSnapshot();
             expect(value2).toEqual({ status: "success", data: 2 });
@@ -1103,49 +1197,91 @@ describe("AsyncComputedGeneratorFlow", () => {
             expect(listener).toHaveBeenCalledTimes(4); // outdated computation ignored
         });
 
-        it("should notify about aborted computation", async () => {
+        it("should not notify about aborted computation if previous computation has not finished", async () => {
             //  C1
             //  |   C2
             //  |   |
             //  R1  |
             //      |
             //      R2
-            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync, signal }) {
-                const value = yield* getAsync(get(source));
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get, signal }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
                 signal.throwIfAborted();
                 return value;
             });
             const listener = vi.fn();
             flow.subscribe(listener);
+            resolvers[0]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
             expect(listener).toHaveBeenCalledTimes(1); // pending->success transition
 
             // start first computation (C1)
-            const c1 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c1);
+            source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(2); // success->pending transition
 
             // start second computation (C2)
-            const c2 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c2);
+            source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
 
             // finish first computation
-            c1.emit({ status: "success", data: 1 });
+            resolvers[1]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
-            expect(listener).toHaveBeenCalledTimes(4); // aborted computation, the status may have changed
+            expect(listener).toHaveBeenCalledTimes(3); // aborted computation, the status may have changed
 
             // finish second computation
-            c2.emit({ status: "success", data: 2 });
+            resolvers[2]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 2 });
-            expect(listener).toHaveBeenCalledTimes(5); // pending->success transition
+            expect(listener).toHaveBeenCalledTimes(4); // pending->success transition
+        });
+
+        it("should notify about aborted computation if previous computation has finished", async () => {
+            //  C1
+            //  |
+            //  |
+            //  R1
+            //      C2
+            //      |
+            //      |
+            //      R2
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
+
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get, skip }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
+                if (value === 2) {
+                    skip();
+                }
+                return value;
+            });
+            const listener = vi.fn();
+
+            // start first computation (C1)
+            flow.subscribe(listener);
+            resolvers[0]?.();
+            await nextTick();
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
+            expect(listener).toHaveBeenCalledTimes(1); // pending->success transition
+
+            // start second computation (C2)
+            source.emit(2);
+            expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
+            expect(listener).toHaveBeenCalledTimes(2); // success->pending transition
+
+            // finish second computation
+            resolvers[1]?.();
+            await nextTick();
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
+            expect(listener).toHaveBeenCalledTimes(3); // pending->success transition
         });
 
         it("should not notify about aborted outdated computation", async () => {
@@ -1154,40 +1290,41 @@ describe("AsyncComputedGeneratorFlow", () => {
             //  |   |
             //  |   R2
             //  R1
-            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync, signal }) {
-                const value = yield* getAsync(get(source));
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get, signal }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
                 signal.throwIfAborted();
                 return value;
             });
             const listener = vi.fn();
             flow.subscribe(listener);
+            resolvers[0]?.();
             await nextTick();
             expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
             expect(listener).toHaveBeenCalledTimes(1); // pending->success transition
 
             // start first computation (C1)
-            const c1 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c1);
+            source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(2); // success->pending transition
 
             // start second computation (C2)
-            const c2 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c2);
+            source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
             expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
 
             // finish second computation
-            c2.emit({ status: "success", data: 2 });
+            resolvers[2]?.();
             await nextTick();
             const value1 = flow.getSnapshot();
             expect(value1).toEqual({ status: "success", data: 2 });
             expect(listener).toHaveBeenCalledTimes(4); // pending->success transition
 
             // finish first computation
-            c1.emit({ status: "success", data: 1 });
+            resolvers[1]?.();
             await nextTick();
             const value2 = flow.getSnapshot();
             expect(value2).toEqual({ status: "success", data: 2 });
@@ -1219,21 +1356,25 @@ describe("AsyncComputedGeneratorFlow", () => {
         });
 
         it("should wait for pending state to resolve", async () => {
-            const source = createFlow(createAsyncFlow<string>({ status: "success", data: "initial" }));
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync }) {
-                return yield* getAsync(get(source));
+            const source = createFlow("initial");
+            const resolvers: (() => void)[] = [];
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
+                return value;
             });
 
+            flow.getSnapshot();
+            resolvers[0]?.();
             await expect(flow.asPromise()).resolves.toBe("initial");
 
-            const asyncFlow = createAsyncFlow<string>({ status: "pending" });
-            source.emit(asyncFlow);
+            source.emit("resolved");
 
             const promise = flow.asPromise();
             const status = await Promise.race([promise, Promise.resolve("pending")]);
             expect(status).toBe("pending");
 
-            asyncFlow.emit({ status: "success", data: "resolved" });
+            resolvers[1]?.();
             await nextTick();
             const status2 = await Promise.race([promise, Promise.resolve("pending")]);
             expect(status2).toBe("resolved");
@@ -1305,32 +1446,35 @@ describe("AsyncComputedGeneratorFlow", () => {
             //  R1  |
             //      |
             //      R2
-            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync, signal }) {
-                const value = yield* getAsync(get(source));
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get, signal }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
                 signal.throwIfAborted();
                 return value;
             });
+
+            flow.getSnapshot();
+            resolvers[0]?.();
             await expect(flow.asPromise()).resolves.toBe(0);
 
             // start first computation (C1)
-            const c1 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c1);
+            source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const c2 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c2);
+            source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish first computation
-            c1.emit({ status: "success", data: 1 });
+            resolvers[1]?.();
             await nextTick();
             const status = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status).toBe("pending");
 
             // finish second computation
-            c2.emit({ status: "success", data: 2 });
+            resolvers[2]?.();
             await nextTick();
             const status2 = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status2).toBe(2);
@@ -1342,32 +1486,35 @@ describe("AsyncComputedGeneratorFlow", () => {
             //  |   |
             //  |   R2
             //  R1
-            const source = createFlow(createAsyncFlow<number>({ status: "success", data: 0 }));
-            const flow = new AsyncComputedGeneratorFlow(function* ({ get, getAsync, signal }) {
-                const value = yield* getAsync(get(source));
+            const source = createFlow(0);
+            const resolvers: (() => void)[] = [];
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get, signal }) {
+                const value = get(source);
+                yield new Promise<void>((r) => resolvers.push(r));
                 signal.throwIfAborted();
                 return value;
             });
+
+            flow.getSnapshot();
+            resolvers[0]?.();
             await expect(flow.asPromise()).resolves.toBe(0);
 
             // start first computation (C1)
-            const c1 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c1);
+            source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // start second computation (C2)
-            const c2 = createAsyncFlow<number>({ status: "pending" });
-            source.emit(c2);
+            source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
 
             // finish second computation
-            c2.emit({ status: "success", data: 2 });
+            resolvers[2]?.();
             await nextTick();
             const status = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status).toBe(2);
 
             // finish first computation
-            c1.emit({ status: "success", data: 1 });
+            resolvers[1]?.();
             await nextTick();
             const status2 = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status2).toBe(2);

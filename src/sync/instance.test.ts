@@ -1002,6 +1002,47 @@ describe("ComputedFlow", () => {
 
             expect(() => flow.getSnapshot()).toThrow();
         });
+
+        it("should re-compute after skipped computation", () => {
+            const skipSource = createFlow(false);
+            const source = createFlow(0);
+            const getSnapshot = vi.fn();
+
+            const flow = new ComputedFlow<unknown>(({ get, skip }) => {
+                getSnapshot();
+                if (get(skipSource)) {
+                    skip();
+                }
+                return get(source);
+            });
+
+            const listener = vi.fn();
+            flow.subscribe(listener);
+
+            expect(listener).toHaveBeenCalledTimes(0);
+            expect(flow.getSnapshot()).toBe(0);
+            expect(getSnapshot).toHaveBeenCalledTimes(1);
+
+            skipSource.emit(true);
+            expect(listener).toHaveBeenCalledTimes(1);
+            expect(flow.getSnapshot()).toBe(0);
+            expect(getSnapshot).toHaveBeenCalledTimes(2);
+
+            source.emit(1);
+            expect(listener).toHaveBeenCalledTimes(2);
+            expect(flow.getSnapshot()).toBe(0);
+            expect(getSnapshot).toHaveBeenCalledTimes(3);
+
+            skipSource.emit(false);
+            expect(listener).toHaveBeenCalledTimes(3);
+            expect(flow.getSnapshot()).toBe(1);
+            expect(getSnapshot).toHaveBeenCalledTimes(4);
+
+            source.emit(2);
+            expect(listener).toHaveBeenCalledTimes(4);
+            expect(flow.getSnapshot()).toBe(2);
+            expect(getSnapshot).toHaveBeenCalledTimes(5);
+        });
     });
 
     describe("edge cases", () => {

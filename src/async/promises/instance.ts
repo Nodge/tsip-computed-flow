@@ -1,7 +1,7 @@
 import type { AsyncFlow } from "@tsip/types";
-import { tryPromise } from "../../lib/tryPromise";
 import { AsyncComputedFlowBase, type AsyncComputedFlowOptions } from "../instance";
 import type { AsyncFlowComputation, AsyncFlowComputationContext } from "../computation";
+import { tracker } from "../../lib/tracker";
 
 /**
  * A function that computes the value for an AsyncComputedPromiseFlow.
@@ -41,22 +41,29 @@ export class AsyncComputedPromiseFlow<T> extends AsyncComputedFlowBase<T> implem
      * Executes the async computation using the promise-based getter function.
      *
      * @param computation - The computation context for this async operation
+     * @returns An AsyncFlowComputation containing the computed value or error state
      */
     protected computeAsync(computation: AsyncFlowComputation<T>) {
-        const promise = tryPromise(() => this.getter(computation.getContext()));
-        promise.then(
-            (data) => {
-                computation.setValue({
-                    status: "success",
-                    data,
-                });
-                this.onComputationFinished(computation);
-            },
-            (error: unknown) => {
-                const state = this.handleComputationError(error);
-                computation.setValue(state);
-                this.onComputationFinished(computation);
-            },
-        );
+        tracker.start();
+        try {
+            this.getter(computation.getContext()).then(
+                (data) => {
+                    computation.setValue({
+                        status: "success",
+                        data,
+                    });
+                    this.onComputationFinished(computation);
+                },
+                (error: unknown) => {
+                    this.handleComputationError(computation, error);
+                },
+            );
+            return computation;
+        } catch (err) {
+            return this.handleComputationError(computation, err);
+        } finally {
+            // todo: finalize here to stop adding new sources
+            tracker.stop();
+        }
     }
 }

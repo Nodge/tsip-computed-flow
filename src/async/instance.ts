@@ -67,9 +67,9 @@ export abstract class AsyncComputedFlowBase<T>
     private options: AsyncComputedFlowOptions<T> | undefined;
 
     /**
-     * The currently in-progress computation, if any
+     * The currently in-progress computations
      */
-    private pendingComputation: AsyncFlowComputation<T> | null = null;
+    private pendingComputations: AsyncFlowComputation<T>[] = [];
 
     /**
      * The last fully completed computation, if any
@@ -145,43 +145,16 @@ export abstract class AsyncComputedFlowBase<T>
         computation.setValue(state);
         this.onComputationStarted(computation);
 
-        this.computeAsync(computation);
-
-        return computation;
+        return this.computeAsync(computation);
     }
 
     /**
      * Abstract method that subclasses must implement to perform the actual async computation.
      *
      * @param computation - The computation context to use for the async operation
+     * @returns An AsyncFlowComputation containing the computed value or error state
      */
-    protected abstract computeAsync(computation: AsyncFlowComputation<T>): void;
-
-    /**
-     * Handles computation errors and returns the appropriate state.
-     *
-     * @param error - The error that occurred during computation
-     * @returns The appropriate AsyncFlowState for the error
-     */
-    protected handleComputationError(error: unknown): AsyncFlowState<T> {
-        const lastValue = this.lastFinishedComputation?.getValue();
-
-        if (isAbortError(error)) {
-            return (
-                lastValue ??
-                this.options?.initialValue ?? {
-                    status: "error",
-                    error,
-                }
-            );
-        }
-
-        return {
-            status: "error",
-            error,
-            data: lastValue?.data,
-        };
-    }
+    protected abstract computeAsync(computation: AsyncFlowComputation<T>): AsyncFlowComputation<T>;
 
     /**
      * Handles the start of a new computation.
@@ -189,9 +162,8 @@ export abstract class AsyncComputedFlowBase<T>
      * @param computation - The newly started computation
      */
     protected onComputationStarted(computation: AsyncFlowComputation<T>): void {
-        // This ensures that only the most recent computation continues, preventing race conditions.
-        this.pendingComputation?.abort();
-        this.pendingComputation = computation;
+        this.pendingComputations.at(-1)?.abort();
+        this.pendingComputations.push(computation);
     }
 
     /**
@@ -201,14 +173,14 @@ export abstract class AsyncComputedFlowBase<T>
      */
     protected onComputationFinished(computation: AsyncFlowComputation<T>): void {
         computation.finalize();
+        this.removePending(computation);
 
-        // Ignore outdated computations
-        if (this.currentEpoch > computation.epoch) {
+        const isOutdated = this.currentEpoch > computation.epoch;
+        if (isOutdated) {
             return;
         }
 
         this.currentEpoch = computation.epoch;
-        this.pendingComputation = null;
         this.lastFinishedComputation = computation;
 
         // Subscribe to the new list of sources and unsubscribe from previous sources
@@ -224,5 +196,94 @@ export abstract class AsyncComputedFlowBase<T>
 
         // Notify flow consumers about the completion of the async operation
         this.onSourcesChanged();
+    }
+
+    /**
+     * Handles computation errors and returns the appropriate state.
+     *
+     * @param computation - The computation that has finished with error
+     * @param error - The error that occurred during computation
+     * @returns An AsyncFlowComputation containing the computed value or error state
+     */
+    protected handleComputationError(computation: AsyncFlowComputation<T>, error: unknown): AsyncFlowComputation<T> {
+        if (isAbortError(error)) {
+            const prevComputation = this.getPreviousComputation(computation);
+            if (prevComputation) {
+                this.revertComputation(computation, prevComputation);
+                return prevComputation;
+            }
+
+            const state = this.options?.initialValue ?? {
+                status: "error",
+                error,
+            };
+            computation.setValue(state);
+        } else {
+            computation.setValue({
+                status: "error",
+                error,
+                data: this.lastFinishedComputation?.getValue().data,
+            });
+        }
+
+        this.onComputationFinished(computation);
+        return computation;
+    }
+
+    /**
+     * Finds the most recent computation to revert to when the current computation is aborted.
+     *
+     * This method checks two cases:
+     * - If there's an in-flight unfinalized computation, revert to it
+     * - If there's a previously finished computation, revert to it
+     *
+     * @param current - The current computation that is being aborted
+     * @returns The computation to revert to, or null if none is available
+     */
+    protected getPreviousComputation(current: AsyncFlowComputation<T>): AsyncFlowComputation<T> | null {
+        for (let i = this.pendingComputations.length - 1; i >= 0; i--) {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            const computation = this.pendingComputations[i]!;
+            if (computation !== current) {
+                return computation;
+            }
+        }
+
+        return this.lastFinishedComputation;
+    }
+
+    /**
+     * Reverts the current computation to a previous target computation.
+     *
+     * @param current - The computation to revert from
+     * @param target - The computation to revert to
+     */
+    private revertComputation(current: AsyncFlowComputation<T>, target: AsyncFlowComputation<T>) {
+        current.finalize();
+        this.removePending(current);
+
+        target.updateSourcesValue();
+        this.cachedComputation = target;
+
+        const currentStatus = "pending"; // skipped computation always has 'pending' status
+        const targetStatus = target.getValue().status;
+
+        const isOutdated = this.currentEpoch > current.epoch;
+        if (currentStatus !== targetStatus && !isOutdated) {
+            // Notify flow consumers about reverting the state
+            this.onSourcesChanged();
+        }
+    }
+
+    /**
+     * Removes a computation from the pending computations list.
+     *
+     * @param computation - The computation to remove from the pending list
+     */
+    private removePending(computation: AsyncFlowComputation<T>): void {
+        const index = this.pendingComputations.indexOf(computation);
+        if (index > -1) {
+            this.pendingComputations.splice(index, 1);
+        }
     }
 }

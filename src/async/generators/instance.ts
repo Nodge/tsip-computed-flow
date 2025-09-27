@@ -2,6 +2,7 @@ import type { AsyncFlow } from "@tsip/types";
 import { isPromiseLike } from "../../lib/isPromiseLike";
 import { AsyncComputedFlowBase, type AsyncComputedFlowOptions } from "../instance";
 import type { AsyncFlowComputation, AsyncFlowComputationContext } from "../computation";
+import { tracker } from "../../lib/tracker";
 
 /**
  * A function that computes the value for an AsyncComputedGeneratorFlow.
@@ -43,10 +44,11 @@ export class AsyncComputedGeneratorFlow<T> extends AsyncComputedFlowBase<T> impl
      * Executes the async computation using the generator-based getter function.
      *
      * @param computation - The computation context for this async operation
+     * @returns An AsyncFlowComputation containing the computed value or error state
      */
     protected computeAsync(computation: AsyncFlowComputation<T>) {
         const iter = this.getter(computation.getContext());
-        void this.handleIterator(iter, computation);
+        return this.run(iter, computation);
     }
 
     /**
@@ -57,39 +59,55 @@ export class AsyncComputedGeneratorFlow<T> extends AsyncComputedFlowBase<T> impl
      *
      * @param iterator - The generator iterator to execute
      * @param computation - The computation context for this async operation
+     * @param assertPromiseResult - Function that checks the result of the previously yielded promise.
+     * @returns An AsyncFlowComputation containing the computed value or error state
      */
-    private async handleIterator(iterator: Generator<unknown, T, undefined>, computation: AsyncFlowComputation<T>) {
+    private run(
+        iterator: Generator<unknown, T, undefined>,
+        computation: AsyncFlowComputation<T>,
+        assertPromiseResult: (() => void) | null = null,
+    ): AsyncFlowComputation<T> {
+        tracker.start();
         try {
-            let result = iterator.next();
+            let result: IteratorResult<unknown, T> | null = null;
             for (;;) {
-                if (result.done) {
+                if (result?.done) {
                     computation.setValue({
                         status: "success",
                         data: result.value,
                     });
                     this.onComputationFinished(computation);
-                    return;
+                    return computation;
                 }
 
                 try {
-                    const value = result.value;
+                    const value = result?.value;
                     if (isPromiseLike(value)) {
-                        // todo: stop tracking
-                        await value;
-                        // todo: start tracking
+                        tracker.stop();
+                        value.then(
+                            () => {
+                                this.run(iterator, computation);
+                            },
+                            (err: unknown) => {
+                                this.run(iterator, computation, () => {
+                                    throw err;
+                                });
+                            },
+                        );
+                        return computation;
                     }
+                    assertPromiseResult?.();
+                    assertPromiseResult = null;
                     result = iterator.next();
                 } catch (err) {
-                    // todo: start tracking
+                    tracker.start();
                     result = iterator.throw(err);
                 }
             }
         } catch (error) {
-            const state = this.handleComputationError(error);
-            computation.setValue(state);
-            this.onComputationFinished(computation);
+            return this.handleComputationError(computation, error);
         } finally {
-            // todo: stop tracking
+            tracker.stop();
         }
     }
 }
