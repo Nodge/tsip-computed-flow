@@ -83,7 +83,7 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
      * @example
      * ```typescript
      * const sourceFlow = createFlow(0);
-     * const computedFlow = computed((ctx) => ctx.get(sourceFlow) * 2);
+     * const computedFlow = computed((ctx) => ctx.watch(sourceFlow) * 2);
      *
      * const subscription = computedFlow.subscribe(() => {
      *   console.log('New value:', computedFlow.getSnapshot());

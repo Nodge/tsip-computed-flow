@@ -23,5 +23,5 @@ import { computedFlow } from "../sync/factory";
  * ```
  */
 export function mapFlow<T, U>(flow: Flow<T>, mapper: (value: T) => U): Flow<U> {
-    return computedFlow((ctx) => mapper(ctx.get(flow)));
+    return computedFlow((ctx) => mapper(ctx.watch(flow)));
 }

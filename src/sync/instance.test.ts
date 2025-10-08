@@ -24,13 +24,13 @@ describe("ComputedFlow", () => {
 
             const source = createFlow(0);
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const flow8: Flow<number> = new ComputedFlow(({ get }) => get(source));
+            const flow8: Flow<number> = new ComputedFlow(({ watch }) => watch(source));
         });
 
         it("should infer return type with skips", () => {
             const source = createFlow<"a" | "b">("a");
-            const flow = new ComputedFlow(({ get, skip }) => {
-                const value = get(source);
+            const flow = new ComputedFlow(({ watch, skip }) => {
+                const value = watch(source);
                 if (value === "a") {
                     return skip();
                 }
@@ -50,7 +50,7 @@ describe("ComputedFlow", () => {
 
         it("should compute value based on dependencies", () => {
             const source = createFlow(2);
-            const flow = new ComputedFlow(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow(({ watch }) => watch(source) * 2);
             const value = flow.getSnapshot();
             expect(value).toBe(4);
         });
@@ -58,7 +58,7 @@ describe("ComputedFlow", () => {
         it("should recompute when dependencies change", () => {
             const source = createFlow(2);
 
-            const flow = new ComputedFlow(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow(({ watch }) => watch(source) * 2);
             expect(flow.getSnapshot()).toBe(4);
 
             source.emit(3);
@@ -70,7 +70,7 @@ describe("ComputedFlow", () => {
             const source2 = createFlow(3);
             const source3 = createFlow(4);
 
-            const flow = new ComputedFlow(({ get }) => get(source1) + get(source2) + get(source3));
+            const flow = new ComputedFlow(({ watch }) => watch(source1) + watch(source2) + watch(source3));
             expect(flow.getSnapshot()).toBe(2 + 3 + 4);
 
             source1.emit(5);
@@ -84,7 +84,7 @@ describe("ComputedFlow", () => {
     describe("subscription behavior", () => {
         it("should notify subscribers on deps change", () => {
             const source = createFlow(1);
-            const flow = new ComputedFlow(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow(({ watch }) => watch(source) * 2);
             const listener = vi.fn();
 
             flow.subscribe(listener);
@@ -97,7 +97,7 @@ describe("ComputedFlow", () => {
 
         it("should notify multiple subscribers", () => {
             const source = createFlow(1);
-            const flow = new ComputedFlow(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow(({ watch }) => watch(source) * 2);
             const listener1 = vi.fn();
             const listener2 = vi.fn();
             const listener3 = vi.fn();
@@ -115,7 +115,7 @@ describe("ComputedFlow", () => {
 
         it("should notify the same subscriber multiple times", () => {
             const source = createFlow(1);
-            const flow = new ComputedFlow(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow(({ watch }) => watch(source) * 2);
             const listener = vi.fn();
 
             flow.subscribe(listener);
@@ -128,7 +128,7 @@ describe("ComputedFlow", () => {
 
         it("should stop notifications after unsubscribe", () => {
             const source = createFlow(1);
-            const flow = new ComputedFlow(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow(({ watch }) => watch(source) * 2);
             const listener = vi.fn();
 
             const subscription = flow.subscribe(listener);
@@ -143,7 +143,7 @@ describe("ComputedFlow", () => {
 
         it("should notify at most once between getSnapshot calls", () => {
             const source = createFlow(1);
-            const flow = new ComputedFlow(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow(({ watch }) => watch(source) * 2);
             const listener = vi.fn();
 
             flow.subscribe(listener);
@@ -161,7 +161,7 @@ describe("ComputedFlow", () => {
 
         it("should handle subscription during notification", () => {
             const source = createFlow(1);
-            const flow = new ComputedFlow(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow(({ watch }) => watch(source) * 2);
             const listener1 = vi.fn();
             const listener2 = vi.fn();
 
@@ -187,7 +187,7 @@ describe("ComputedFlow", () => {
 
         it("should handle unsubscription during notification", () => {
             const source = createFlow(1);
-            const flow = new ComputedFlow(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow(({ watch }) => watch(source) * 2);
             const listener1 = vi.fn();
             const listener2 = vi.fn();
 
@@ -216,7 +216,7 @@ describe("ComputedFlow", () => {
 
         it("should remove only specific subscription on multiple unsubscribe calls", () => {
             const source = createFlow(1);
-            const flow = new ComputedFlow(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow(({ watch }) => watch(source) * 2);
             const listener1 = vi.fn();
             const listener2 = vi.fn();
 
@@ -236,7 +236,7 @@ describe("ComputedFlow", () => {
 
         it("should allow reading snapshot inside listener", () => {
             const source = createFlow("");
-            const flow = new ComputedFlow(({ get }) => get(source));
+            const flow = new ComputedFlow(({ watch }) => watch(source));
             const spy = vi.fn();
 
             flow.subscribe(() => {
@@ -257,7 +257,7 @@ describe("ComputedFlow", () => {
         it("should not re-compute on instance creation", () => {
             const source = createFlow(1);
             const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                return ctx.get(source) * 2;
+                return ctx.watch(source) * 2;
             });
             new ComputedFlow(getter);
 
@@ -267,7 +267,7 @@ describe("ComputedFlow", () => {
         it("should re-compute on first subscription", () => {
             const source = createFlow(1);
             const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                return ctx.get(source) * 2;
+                return ctx.watch(source) * 2;
             });
             const flow = new ComputedFlow(getter);
             expect(getter).toHaveBeenCalledTimes(0);
@@ -280,7 +280,7 @@ describe("ComputedFlow", () => {
             it("should return cached value if deps has not been changed", () => {
                 const source = createFlow(1);
                 const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                    return { value: ctx.get(source) };
+                    return { value: ctx.watch(source) };
                 });
                 const flow = new ComputedFlow<unknown>(getter);
 
@@ -297,7 +297,7 @@ describe("ComputedFlow", () => {
             it("should re-compute value if deps has been changed", () => {
                 const source = createFlow(1);
                 const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                    return { value: ctx.get(source) };
+                    return { value: ctx.watch(source) };
                 });
                 const flow = new ComputedFlow<unknown>(getter);
 
@@ -321,7 +321,7 @@ describe("ComputedFlow", () => {
             it("should not re-compute without getSnapshot call", () => {
                 const source = createFlow(1);
                 const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                    return { value: ctx.get(source) };
+                    return { value: ctx.watch(source) };
                 });
                 const flow = new ComputedFlow<unknown>(getter);
 
@@ -338,10 +338,10 @@ describe("ComputedFlow", () => {
                 const a = createFlow("a");
                 const b = createFlow("b");
                 const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                    if (ctx.get(source)) {
-                        return { value: ctx.get(a) };
+                    if (ctx.watch(source)) {
+                        return { value: ctx.watch(a) };
                     } else {
-                        return { value: ctx.get(b) };
+                        return { value: ctx.watch(b) };
                     }
                 });
                 const flow = new ComputedFlow<unknown>(getter);
@@ -383,7 +383,7 @@ describe("ComputedFlow", () => {
             it("should return cached value if sources has changed but ended up with same value", () => {
                 const source = createFlow(1);
                 const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                    return { value: ctx.get(source) };
+                    return { value: ctx.watch(source) };
                 });
                 const flow = new ComputedFlow<unknown>(getter);
 
@@ -405,7 +405,7 @@ describe("ComputedFlow", () => {
             it("should return cached value if deps has not been changed", () => {
                 const source = createFlow(1);
                 const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                    return { value: ctx.get(source) };
+                    return { value: ctx.watch(source) };
                 });
                 const flow = new ComputedFlow<unknown>(getter);
                 expect(getter).toHaveBeenCalledTimes(0);
@@ -420,7 +420,7 @@ describe("ComputedFlow", () => {
             it("should re-compute value if deps has been changed", () => {
                 const source = createFlow(1);
                 const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                    return { value: ctx.get(source) };
+                    return { value: ctx.watch(source) };
                 });
                 const flow = new ComputedFlow<unknown>(getter);
 
@@ -443,7 +443,7 @@ describe("ComputedFlow", () => {
             it("should not re-compute without getSnapshot call", () => {
                 const source = createFlow(1);
                 const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                    return { value: ctx.get(source) };
+                    return { value: ctx.watch(source) };
                 });
                 new ComputedFlow<unknown>(getter);
                 expect(getter).toHaveBeenCalledTimes(0);
@@ -458,10 +458,10 @@ describe("ComputedFlow", () => {
                 const a = createFlow("a");
                 const b = createFlow("b");
                 const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                    if (ctx.get(source)) {
-                        return { value: ctx.get(a) };
+                    if (ctx.watch(source)) {
+                        return { value: ctx.watch(a) };
                     } else {
-                        return { value: ctx.get(b) };
+                        return { value: ctx.watch(b) };
                     }
                 });
                 const flow = new ComputedFlow<unknown>(getter);
@@ -502,7 +502,7 @@ describe("ComputedFlow", () => {
             it("should return cached value if sources has changed but ended up with same value", () => {
                 const source = createFlow(1);
                 const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                    return { value: ctx.get(source) };
+                    return { value: ctx.watch(source) };
                 });
                 const flow = new ComputedFlow<unknown>(getter);
 
@@ -521,7 +521,7 @@ describe("ComputedFlow", () => {
             it("should return cached value after the last subscription has been removed", () => {
                 const source = createFlow(1);
                 const getter = vi.fn().mockImplementation((ctx: FlowComputationContext) => {
-                    return { value: ctx.get(source) };
+                    return { value: ctx.watch(source) };
                 });
                 const flow = new ComputedFlow<unknown>(getter);
 
@@ -549,14 +549,14 @@ describe("ComputedFlow", () => {
         it("does not subscribe to sources on instance creation", () => {
             const source = createFlow(1);
             const spy = vi.spyOn(source, "subscribe");
-            new ComputedFlow<unknown>(({ get }) => get(source) * 2);
+            new ComputedFlow<unknown>(({ watch }) => watch(source) * 2);
             expect(spy).not.toHaveBeenCalled();
         });
 
         it("should subscribe to sources on first listener", () => {
             const source = createFlow(1);
             const spy = vi.spyOn(source, "subscribe");
-            const flow = new ComputedFlow<unknown>(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow<unknown>(({ watch }) => watch(source) * 2);
             expect(spy).not.toHaveBeenCalled();
 
             flow.subscribe(vi.fn());
@@ -566,7 +566,7 @@ describe("ComputedFlow", () => {
         it("should subscribe to each source only once", () => {
             const source = createFlow(1);
             const subscribe = vi.spyOn(source, "subscribe");
-            const flow = new ComputedFlow<unknown>(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow<unknown>(({ watch }) => watch(source) * 2);
 
             expect(subscribe).not.toHaveBeenCalled();
             expect(getSubscriptionsCount(source)).toBe(0);
@@ -588,7 +588,7 @@ describe("ComputedFlow", () => {
         it("should clean up subscriptions when no subscribers remain", () => {
             const source = createFlow(1);
             const subscribe = vi.spyOn(source, "subscribe");
-            const flow = new ComputedFlow<unknown>(({ get }) => get(source) * 2);
+            const flow = new ComputedFlow<unknown>(({ watch }) => watch(source) * 2);
 
             expect(subscribe).not.toHaveBeenCalled();
             expect(getSubscriptionsCount(source)).toBe(0);
@@ -611,11 +611,11 @@ describe("ComputedFlow", () => {
             const b = createFlow("b");
             const bSubscribe = vi.spyOn(b, "subscribe");
 
-            const flow = new ComputedFlow<unknown>(({ get }) => {
-                if (get(source)) {
-                    return { value: get(a) };
+            const flow = new ComputedFlow<unknown>(({ watch }) => {
+                if (watch(source)) {
+                    return { value: watch(a) };
                 } else {
-                    return { value: get(b) };
+                    return { value: watch(b) };
                 }
             });
 
@@ -686,8 +686,8 @@ describe("ComputedFlow", () => {
                 throw error;
             };
 
-            const flow = new ComputedFlow<unknown>(({ get }) => {
-                return get(source);
+            const flow = new ComputedFlow<unknown>(({ watch }) => {
+                return watch(source);
             });
 
             flow.subscribe(vi.fn());
@@ -703,9 +703,9 @@ describe("ComputedFlow", () => {
                 throw error;
             });
 
-            const flow = new ComputedFlow<unknown>(({ get }) => {
-                get(normalSource);
-                get(errorSource);
+            const flow = new ComputedFlow<unknown>(({ watch }) => {
+                watch(normalSource);
+                watch(errorSource);
             });
 
             expect(() => flow.getSnapshot()).toThrow(error);
@@ -731,9 +731,9 @@ describe("ComputedFlow", () => {
                 throw error;
             });
 
-            const flow = new ComputedFlow<unknown>(({ get }) => {
-                get(normalSource);
-                get(errorSource);
+            const flow = new ComputedFlow<unknown>(({ watch }) => {
+                watch(normalSource);
+                watch(errorSource);
             });
 
             flow.subscribe(vi.fn());
@@ -769,7 +769,7 @@ describe("ComputedFlow", () => {
                 return 123;
             });
 
-            const flow = new ComputedFlow<unknown>(({ get }) => get(errorSource));
+            const flow = new ComputedFlow<unknown>(({ watch }) => watch(errorSource));
 
             expect(() => flow.getSnapshot()).toThrow(error);
             // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -792,7 +792,7 @@ describe("ComputedFlow", () => {
             const error2 = new Error("Listener 2 error");
 
             const source = createFlow(0);
-            const flow = new ComputedFlow(({ get }) => get(source));
+            const flow = new ComputedFlow(({ watch }) => watch(source));
             flow.subscribe(() => {
                 throw error1;
             });
@@ -815,7 +815,7 @@ describe("ComputedFlow", () => {
 
         it("should still update the state even if listeners throw", () => {
             const source = createFlow(0);
-            const flow = new ComputedFlow(({ get }) => get(source));
+            const flow = new ComputedFlow(({ watch }) => watch(source));
             flow.subscribe(() => {
                 throw new Error("Listener error");
             });
@@ -830,7 +830,7 @@ describe("ComputedFlow", () => {
 
         it("should call all listeners even if some throw", () => {
             const source = createFlow(0);
-            const flow = new ComputedFlow(({ get }) => get(source));
+            const flow = new ComputedFlow(({ watch }) => watch(source));
             const listener1 = vi.fn(() => {
                 throw new Error("Error 1");
             });
@@ -854,7 +854,7 @@ describe("ComputedFlow", () => {
 
         it("should handle mixed success and error scenarios", () => {
             const source = createFlow(0);
-            const flow = new ComputedFlow(({ get }) => get(source));
+            const flow = new ComputedFlow(({ watch }) => watch(source));
             const successListener = vi.fn();
             const errorListener = vi.fn(() => {
                 throw new Error("Test error");
@@ -875,8 +875,8 @@ describe("ComputedFlow", () => {
     describe("skip behavior", () => {
         it("should provide skip() method to abort computation", () => {
             const source = createFlow(1);
-            const flow = new ComputedFlow(({ get, skip }) => {
-                const value = get(source);
+            const flow = new ComputedFlow(({ watch, skip }) => {
+                const value = watch(source);
                 if (value % 2 === 0) {
                     skip();
                 }
@@ -907,8 +907,8 @@ describe("ComputedFlow", () => {
         it("should return initial value if first computation was skipped", () => {
             const source = createFlow(0);
             const flow = new ComputedFlow(
-                ({ get, skip }) => {
-                    const value = get(source);
+                ({ watch, skip }) => {
+                    const value = watch(source);
                     if (value % 2 === 0) {
                         skip();
                     }
@@ -933,8 +933,8 @@ describe("ComputedFlow", () => {
         it("should accept undefined as intial value", () => {
             const source = createFlow(0);
             const flow = new ComputedFlow<number | undefined>(
-                ({ get, skip }) => {
-                    const value = get(source);
+                ({ watch, skip }) => {
+                    const value = watch(source);
                     if (value % 2 === 0) {
                         skip();
                     }
@@ -959,8 +959,8 @@ describe("ComputedFlow", () => {
         it("should accept null as intial value", () => {
             const source = createFlow(0);
             const flow = new ComputedFlow(
-                ({ get, skip }) => {
-                    const value = get(source);
+                ({ watch, skip }) => {
+                    const value = watch(source);
                     if (value % 2 === 0) {
                         skip();
                     }
@@ -985,8 +985,8 @@ describe("ComputedFlow", () => {
         it("should accept different types in getter and initialValue", () => {
             const source = createFlow(0);
             const flow = new ComputedFlow<number | "skip">(
-                ({ get, skip }) => {
-                    const value = get(source);
+                ({ watch, skip }) => {
+                    const value = watch(source);
                     if (value % 2 === 0) {
                         skip();
                     }
@@ -1010,8 +1010,8 @@ describe("ComputedFlow", () => {
 
         it("should throw error if first computation was skipped and initial value was not set", () => {
             const source = createFlow(0);
-            const flow = new ComputedFlow(({ get, skip }) => {
-                const value = get(source);
+            const flow = new ComputedFlow(({ watch, skip }) => {
+                const value = watch(source);
                 if (value % 2 === 0) {
                     skip();
                 }
@@ -1026,12 +1026,12 @@ describe("ComputedFlow", () => {
             const source = createFlow(0);
             const getSnapshot = vi.fn();
 
-            const flow = new ComputedFlow<unknown>(({ get, skip }) => {
+            const flow = new ComputedFlow<unknown>(({ watch, skip }) => {
                 getSnapshot();
-                if (get(skipSource)) {
+                if (watch(skipSource)) {
                     skip();
                 }
-                return get(source);
+                return watch(source);
             });
 
             const listener = vi.fn();
@@ -1066,7 +1066,7 @@ describe("ComputedFlow", () => {
     describe("edge cases", () => {
         it("should handle getter returning undefined and null", () => {
             const source = createFlow<undefined | null>(undefined);
-            const flow = new ComputedFlow((ctx) => ctx.get(source));
+            const flow = new ComputedFlow((ctx) => ctx.watch(source));
 
             expect(flow.getSnapshot()).toBe(undefined);
 
@@ -1079,8 +1079,8 @@ describe("ComputedFlow", () => {
 
         it("should work with other computed flows as sources", () => {
             const source = createFlow(1);
-            const flow1 = new ComputedFlow((ctx) => ctx.get(source) * 2);
-            const flow2 = new ComputedFlow((ctx) => ctx.get(flow1) * 2);
+            const flow1 = new ComputedFlow((ctx) => ctx.watch(source) * 2);
+            const flow2 = new ComputedFlow((ctx) => ctx.watch(flow1) * 2);
 
             expect(flow1.getSnapshot()).toBe(2);
             expect(flow2.getSnapshot()).toBe(4);
@@ -1111,10 +1111,10 @@ describe("ComputedFlow", () => {
 
             const $x = createFlow(2);
 
-            const $a = new ComputedFlow((ctx) => ctx.get($x) - 1);
-            const $b = new ComputedFlow((ctx) => ctx.get($x) + ctx.get($a));
+            const $a = new ComputedFlow((ctx) => ctx.watch($x) - 1);
+            const $b = new ComputedFlow((ctx) => ctx.watch($x) + ctx.watch($a));
 
-            const compute = vi.fn((ctx: FlowComputationContext) => "c: " + ctx.get($b).toString());
+            const compute = vi.fn((ctx: FlowComputationContext) => "c: " + ctx.watch($b).toString());
             const $c = new ComputedFlow(compute);
 
             expect($c.getSnapshot()).toBe("c: 3");
@@ -1136,10 +1136,10 @@ describe("ComputedFlow", () => {
             //     C
 
             const $x = createFlow("a");
-            const $a = new ComputedFlow((ctx) => ctx.get($x));
-            const $b = new ComputedFlow((ctx) => ctx.get($x));
+            const $a = new ComputedFlow((ctx) => ctx.watch($x));
+            const $b = new ComputedFlow((ctx) => ctx.watch($x));
 
-            const spy = vi.fn((ctx: FlowComputationContext) => ctx.get($a) + " " + ctx.get($b));
+            const spy = vi.fn((ctx: FlowComputationContext) => ctx.watch($a) + " " + ctx.watch($b));
             const $c = new ComputedFlow(spy);
 
             expect($c.getSnapshot()).toBe("a a");
@@ -1162,11 +1162,11 @@ describe("ComputedFlow", () => {
 
             const $x = createFlow("a");
 
-            const $a = new ComputedFlow((ctx) => ctx.get($x));
-            const $b = new ComputedFlow((ctx) => ctx.get($x));
-            const $c = new ComputedFlow((ctx) => ctx.get($a) + " " + ctx.get($b));
+            const $a = new ComputedFlow((ctx) => ctx.watch($x));
+            const $b = new ComputedFlow((ctx) => ctx.watch($x));
+            const $c = new ComputedFlow((ctx) => ctx.watch($a) + " " + ctx.watch($b));
 
-            const spy = vi.fn((ctx: FlowComputationContext) => ctx.get($c));
+            const spy = vi.fn((ctx: FlowComputationContext) => ctx.watch($c));
             const $d = new ComputedFlow(spy);
 
             expect($d.getSnapshot()).toBe("a a");
@@ -1184,11 +1184,11 @@ describe("ComputedFlow", () => {
             const $x = createFlow("a");
 
             const $a = new ComputedFlow((ctx) => {
-                ctx.get($x);
+                ctx.watch($x);
                 return "foo";
             });
 
-            const spy = vi.fn((ctx: FlowComputationContext) => ctx.get($a));
+            const spy = vi.fn((ctx: FlowComputationContext) => ctx.watch($a));
             const $b = new ComputedFlow(spy);
 
             expect($b.getSnapshot()).toBe("foo");
@@ -1213,16 +1213,16 @@ describe("ComputedFlow", () => {
 
             const $x = createFlow("a");
 
-            const $a = new ComputedFlow((ctx) => ctx.get($x));
-            const $b = new ComputedFlow((ctx) => ctx.get($x));
-            const $c = new ComputedFlow((ctx) => ctx.get($b));
+            const $a = new ComputedFlow((ctx) => ctx.watch($x));
+            const $b = new ComputedFlow((ctx) => ctx.watch($x));
+            const $c = new ComputedFlow((ctx) => ctx.watch($b));
 
-            const dSpy = vi.fn((ctx: FlowComputationContext) => ctx.get($a) + " " + ctx.get($c));
+            const dSpy = vi.fn((ctx: FlowComputationContext) => ctx.watch($a) + " " + ctx.watch($c));
             const $d = new ComputedFlow(dSpy);
 
-            const eSpy = vi.fn((ctx: FlowComputationContext) => ctx.get($d));
+            const eSpy = vi.fn((ctx: FlowComputationContext) => ctx.watch($d));
             const $e = new ComputedFlow(eSpy);
-            const fSpy = vi.fn((ctx: FlowComputationContext) => ctx.get($d));
+            const fSpy = vi.fn((ctx: FlowComputationContext) => ctx.watch($d));
             const $f = new ComputedFlow(fSpy);
 
             expect($e.getSnapshot()).toBe("a a");
@@ -1263,13 +1263,13 @@ describe("ComputedFlow", () => {
 
             const $x = createFlow("a");
 
-            const $a = new ComputedFlow((ctx) => ctx.get($x));
+            const $a = new ComputedFlow((ctx) => ctx.watch($x));
             const $b = new ComputedFlow((ctx) => {
-                ctx.get($x);
+                ctx.watch($x);
                 return "c";
             });
 
-            const spy = vi.fn((ctx: FlowComputationContext) => ctx.get($a) + " " + ctx.get($b));
+            const spy = vi.fn((ctx: FlowComputationContext) => ctx.watch($a) + " " + ctx.watch($b));
             const $c = new ComputedFlow(spy);
 
             expect($c.getSnapshot()).toBe("a c");
@@ -1291,17 +1291,19 @@ describe("ComputedFlow", () => {
 
             const $x = createFlow("a");
 
-            const $b = new ComputedFlow((ctx) => ctx.get($x));
+            const $b = new ComputedFlow((ctx) => ctx.watch($x));
             const $c = new ComputedFlow((ctx) => {
-                ctx.get($x);
+                ctx.watch($x);
                 return "c";
             });
             const $d = new ComputedFlow((ctx) => {
-                ctx.get($x);
+                ctx.watch($x);
                 return "d";
             });
 
-            const spy = vi.fn((ctx: FlowComputationContext) => ctx.get($b) + " " + ctx.get($c) + " " + ctx.get($d));
+            const spy = vi.fn(
+                (ctx: FlowComputationContext) => ctx.watch($b) + " " + ctx.watch($c) + " " + ctx.watch($d),
+            );
             const $e = new ComputedFlow(spy);
 
             expect($e.getSnapshot()).toBe("a c d");
@@ -1325,18 +1327,18 @@ describe("ComputedFlow", () => {
             let seq = "";
             const a1 = createFlow(false);
             const b1 = new ComputedFlow((ctx) => {
-                ctx.get(a1);
+                ctx.watch(a1);
                 seq += "b1";
                 return {};
             });
             const b2 = new ComputedFlow((ctx) => {
-                ctx.get(a1);
+                ctx.watch(a1);
                 seq += "b2";
                 return {};
             });
             const c1 = new ComputedFlow((ctx) => {
-                ctx.get(b1);
-                ctx.get(b2);
+                ctx.watch(b1);
+                ctx.watch(b2);
                 seq += "c1";
                 return {};
             });
@@ -1360,14 +1362,14 @@ describe("ComputedFlow", () => {
             //         g
             let gcount = 0;
             const d = createFlow(0);
-            const f1 = new ComputedFlow((ctx) => ctx.get(d));
-            const f2 = new ComputedFlow((ctx) => ctx.get(d));
-            const f3 = new ComputedFlow((ctx) => ctx.get(d));
-            const f4 = new ComputedFlow((ctx) => ctx.get(d));
-            const f5 = new ComputedFlow((ctx) => ctx.get(d));
+            const f1 = new ComputedFlow((ctx) => ctx.watch(d));
+            const f2 = new ComputedFlow((ctx) => ctx.watch(d));
+            const f3 = new ComputedFlow((ctx) => ctx.watch(d));
+            const f4 = new ComputedFlow((ctx) => ctx.watch(d));
+            const f5 = new ComputedFlow((ctx) => ctx.watch(d));
             const g = new ComputedFlow((ctx) => {
                 gcount++;
-                return ctx.get(f1) + ctx.get(f2) + ctx.get(f3) + ctx.get(f4) + ctx.get(f5);
+                return ctx.watch(f1) + ctx.watch(f2) + ctx.watch(f3) + ctx.watch(f4) + ctx.watch(f5);
             });
 
             g.getSnapshot();
@@ -1394,26 +1396,26 @@ describe("ComputedFlow", () => {
             let hcount = 0;
             const d = createFlow(0);
             const f1 = new ComputedFlow((ctx) => {
-                return ctx.get(d);
+                return ctx.watch(d);
             });
             const f2 = new ComputedFlow((ctx) => {
-                return ctx.get(d);
+                return ctx.watch(d);
             });
             const f3 = new ComputedFlow((ctx) => {
-                return ctx.get(d);
+                return ctx.watch(d);
             });
             const g1 = new ComputedFlow((ctx) => {
-                return ctx.get(f1) + ctx.get(f2) + ctx.get(f3);
+                return ctx.watch(f1) + ctx.watch(f2) + ctx.watch(f3);
             });
             const g2 = new ComputedFlow((ctx) => {
-                return ctx.get(f1) + ctx.get(f2) + ctx.get(f3);
+                return ctx.watch(f1) + ctx.watch(f2) + ctx.watch(f3);
             });
             const g3 = new ComputedFlow((ctx) => {
-                return ctx.get(f1) + ctx.get(f2) + ctx.get(f3);
+                return ctx.watch(f1) + ctx.watch(f2) + ctx.watch(f3);
             });
             const h = new ComputedFlow((ctx) => {
                 hcount++;
-                return ctx.get(g1) + ctx.get(g2) + ctx.get(g3);
+                return ctx.watch(g1) + ctx.watch(g2) + ctx.watch(g3);
             });
             h.getSnapshot();
             hcount = 0;
@@ -1427,11 +1429,11 @@ describe("ComputedFlow", () => {
             let order = "";
             const t1 = new ComputedFlow((ctx) => {
                 order += "t1";
-                return ctx.get(s1).value;
+                return ctx.watch(s1).value;
             });
             const t2 = new ComputedFlow((ctx) => {
                 order += "c1";
-                ctx.get(t1);
+                ctx.watch(t1);
             });
             t2.getSnapshot();
             expect(order).toBe("c1t1");
@@ -1450,15 +1452,15 @@ describe("ComputedFlow", () => {
             let order = "";
             const t1 = new ComputedFlow((ctx) => {
                 order += "t1";
-                return ctx.get(s1) === 0;
+                return ctx.watch(s1) === 0;
             });
             const t2 = new ComputedFlow((ctx) => {
                 order += "c1";
-                return ctx.get(s1);
+                return ctx.watch(s1);
             });
             const t3 = new ComputedFlow((ctx) => {
                 order += "c2";
-                return ctx.get(t1);
+                return ctx.watch(t1);
             });
             t2.getSnapshot();
             t3.getSnapshot();
@@ -1476,18 +1478,18 @@ describe("ComputedFlow", () => {
             let order = "";
             const t1 = new ComputedFlow((ctx) => {
                 order += "t1";
-                return ctx.get(s1) === 0;
+                return ctx.watch(s1) === 0;
             });
             const t2 = new ComputedFlow((ctx) => {
                 order += "c1";
-                return ctx.get(s1);
+                return ctx.watch(s1);
             });
             const t3 = new ComputedFlow((ctx) => {
                 order += "c2";
-                ctx.get(t1);
+                ctx.watch(t1);
                 return new ComputedFlow((innerCtx) => {
                     order += "c2_1";
-                    return innerCtx.get(s2);
+                    return innerCtx.watch(s2);
                 });
             });
             order = "";
@@ -1511,7 +1513,7 @@ describe("ComputedFlow", () => {
                 fevals = 0;
                 f = new ComputedFlow((ctx) => {
                     fevals++;
-                    return ctx.get(i) ? ctx.get(t) : ctx.get(e);
+                    return ctx.watch(i) ? ctx.watch(t) : ctx.watch(e);
                 });
                 f.getSnapshot();
                 fevals = 0;
@@ -1555,22 +1557,22 @@ describe("ComputedFlow", () => {
                 const a = createFlow(0);
                 const b = new ComputedFlow((ctx) => {
                     order += "b";
-                    return ctx.get(a) + 1;
+                    return ctx.watch(a) + 1;
                 });
                 const c = new ComputedFlow((ctx) => {
                     order += "c";
-                    const check = ctx.get(b);
+                    const check = ctx.watch(b);
                     if (check) {
                         return check;
                     }
-                    return ctx.get(e);
+                    return ctx.watch(e);
                 });
                 const d = new ComputedFlow((ctx) => {
-                    return ctx.get(a);
+                    return ctx.watch(a);
                 });
                 const e = new ComputedFlow((ctx) => {
                     order += "d";
-                    return ctx.get(d) + 10;
+                    return ctx.watch(d) + 10;
                 });
 
                 c.getSnapshot();
@@ -1605,19 +1607,19 @@ describe("ComputedFlow", () => {
             //     \       /
             //        c3
             //  [PN,PN,STL,void]
-            const t1 = new ComputedFlow((ctx) => ctx.get(s1) > 0);
-            const t2 = new ComputedFlow((ctx) => ctx.get(s1) > 0);
-            const c1 = new ComputedFlow((ctx) => ctx.get(s1));
+            const t1 = new ComputedFlow((ctx) => ctx.watch(s1) > 0);
+            const t2 = new ComputedFlow((ctx) => ctx.watch(s1) > 0);
+            const c1 = new ComputedFlow((ctx) => ctx.watch(s1));
             const t3 = new ComputedFlow((ctx) => {
-                const a = ctx.get(s1);
-                const b = ctx.get(s2);
+                const a = ctx.watch(s1);
+                const b = ctx.watch(s2);
                 return a && b;
             });
             const c3 = new ComputedFlow((ctx) => {
-                ctx.get(t1);
-                ctx.get(t2);
-                ctx.get(c1);
-                ctx.get(t3);
+                ctx.watch(t1);
+                ctx.watch(t2);
+                ctx.watch(c1);
+                ctx.watch(t3);
                 count++;
             });
             c3.getSnapshot();
@@ -1650,22 +1652,22 @@ describe("ComputedFlow", () => {
             let order = "";
             const t1 = new ComputedFlow((ctx) => {
                 order += "t1";
-                return ctx.get(s1) > 2;
+                return ctx.watch(s1) > 2;
             });
             const t2 = new ComputedFlow((ctx) => {
                 order += "t2";
-                return ctx.get(s1) > 2;
+                return ctx.watch(s1) > 2;
             });
             const c1 = new ComputedFlow((ctx) => {
                 order += "c1";
-                ctx.get(s1);
+                ctx.watch(s1);
                 return {};
             });
             const c2 = new ComputedFlow((ctx) => {
                 order += "c2";
-                ctx.get(t1);
-                ctx.get(t2);
-                ctx.get(c1);
+                ctx.watch(t1);
+                ctx.watch(t2);
+                ctx.watch(c1);
             });
             c2.getSnapshot();
             order = "";
@@ -1683,19 +1685,19 @@ describe("ComputedFlow", () => {
             let order = "";
             const t1 = new ComputedFlow((ctx) => {
                 order += "t1";
-                return ctx.get(s1);
+                return ctx.watch(s1);
             });
             const c1 = new ComputedFlow((ctx) => {
                 order += "c1";
-                return ctx.get(t1);
+                return ctx.watch(t1);
             });
             const c2 = new ComputedFlow((ctx) => {
                 order += "c2";
-                return ctx.get(c1);
+                return ctx.watch(c1);
             });
             const c3 = new ComputedFlow((ctx) => {
                 order += "c3";
-                return ctx.get(c2);
+                return ctx.watch(c2);
             });
             c3.getSnapshot();
             order = "";
@@ -1716,14 +1718,14 @@ describe("ComputedFlow", () => {
 
             const a = createFlow("a");
             const b = new ComputedFlow((ctx) => {
-                ctx.get(a);
+                ctx.watch(a);
                 return "b";
             });
             const c = new ComputedFlow((ctx) => {
-                ctx.get(a);
+                ctx.watch(a);
                 return "c";
             });
-            const spy = vi.fn((ctx: FlowComputationContext) => ctx.get(b) + " " + ctx.get(c));
+            const spy = vi.fn((ctx: FlowComputationContext) => ctx.watch(b) + " " + ctx.watch(c));
             const d = new ComputedFlow(spy);
 
             expect(d.getSnapshot()).toBe("b c");
@@ -1740,10 +1742,10 @@ describe("ComputedFlow", () => {
             const value = createFlow(0);
 
             const flow = new ComputedFlow(
-                ({ get }) => {
+                ({ watch }) => {
                     return {
-                        id: get(id),
-                        value: get(value),
+                        id: watch(id),
+                        value: watch(value),
                     };
                 },
                 {
@@ -1777,7 +1779,7 @@ describe("ComputedFlow", () => {
         it("should detect side effects inside getter", () => {
             const source = createFlow(0);
             const flow = new ComputedFlow((ctx) => {
-                const value = ctx.get(source);
+                const value = ctx.watch(source);
                 if (value < 5) {
                     source.emit(value + 1);
                 }
@@ -1791,7 +1793,7 @@ describe("ComputedFlow", () => {
         it("should detect side-effects inside listeners", () => {
             const source = createFlow(0);
             const flow = new ComputedFlow((ctx) => {
-                return ctx.get(source);
+                return ctx.watch(source);
             });
 
             flow.subscribe(() => {

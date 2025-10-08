@@ -17,15 +17,15 @@ export interface AsyncFlowComputationContext {
      *
      * @example
      * ```typescript
-     * const value = get(someFlow); // Reads current value and creates dependency
+     * const value = watch(someFlow); // Reads current value and creates dependency
      * ```
      */
-    readonly get: <T>(flow: Flow<T>) => T;
+    readonly watch: <T>(flow: Flow<T>) => T;
 
     /**
      * Utilities for tracking and awaiting asynchronous flow sources.
      */
-    readonly getAsync: {
+    readonly watchAsync: {
         /**
          * Asynchronously reads the value from an async flow.
          *
@@ -38,7 +38,7 @@ export interface AsyncFlowComputationContext {
          *
          * @example
          * ```typescript
-         * const userData = await getAsync(userFlow); // Reads value and creates dependency
+         * const userData = await watchAsync(userFlow); // Reads value and creates dependency
          * ```
          */
         <T>(flow: AsyncFlow<T>): PromiseGenerator<T>;
@@ -179,35 +179,35 @@ export class AsyncFlowComputation<T> extends FlowComputationBase<AsyncFlowState<
      * @returns A context object
      */
     public getContext(): AsyncFlowComputationContext {
-        const getAsync: AsyncFlowComputationContext["getAsync"] = (flow) => {
+        const watchAsync: AsyncFlowComputationContext["watchAsync"] = (flow) => {
             return this.toIterator(this.readAsyncFlow(flow));
         };
 
-        getAsync.all = <T extends readonly AsyncFlow<unknown>[] | []>(flows: T) => {
+        watchAsync.all = <T extends readonly AsyncFlow<unknown>[] | []>(flows: T) => {
             const promise = Promise.all(flows.map((flow) => this.readAsyncFlow(flow)));
             return this.toIterator(promise as Promise<{ -readonly [K in keyof T]: AwaitedFlow<T[K]> }>);
         };
 
-        getAsync.allSettled = <T extends readonly AsyncFlow<unknown>[] | []>(flows: T) => {
+        watchAsync.allSettled = <T extends readonly AsyncFlow<unknown>[] | []>(flows: T) => {
             const promise = Promise.allSettled(flows.map((flow) => this.readAsyncFlow(flow)));
             return this.toIterator(
                 promise as Promise<{ -readonly [K in keyof T]: PromiseSettledResult<AwaitedFlow<T[K]>> }>,
             );
         };
 
-        getAsync.any = <T extends readonly AsyncFlow<unknown>[] | []>(flows: T) => {
+        watchAsync.any = <T extends readonly AsyncFlow<unknown>[] | []>(flows: T) => {
             const promise = Promise.any(flows.map((flow) => this.readAsyncFlow(flow)));
             return this.toIterator(promise as Promise<AwaitedFlow<T[number]>>);
         };
 
-        getAsync.race = <T extends readonly AsyncFlow<unknown>[] | []>(flows: T) => {
+        watchAsync.race = <T extends readonly AsyncFlow<unknown>[] | []>(flows: T) => {
             const promise = Promise.race(flows.map((flow) => this.readAsyncFlow(flow)));
             return this.toIterator(promise as Promise<AwaitedFlow<T[number]>>);
         };
 
         return {
-            get: (flow) => this.readFlow(flow),
-            getAsync,
+            watch: (flow) => this.readFlow(flow),
+            watchAsync,
             skip: () => this.skip(),
             signal: this.abortController.signal,
         };

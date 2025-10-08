@@ -24,5 +24,5 @@ import { asyncComputedFlow } from "../async/factory";
  * ```
  */
 export function mapAsyncFlow<T, U>(flow: AsyncFlow<T>, mapper: (value: T) => U): AsyncFlow<U> {
-    return asyncComputedFlow(async (ctx) => mapper(await ctx.getAsync(flow)));
+    return asyncComputedFlow(async (ctx) => mapper(await ctx.watchAsync(flow)));
 }

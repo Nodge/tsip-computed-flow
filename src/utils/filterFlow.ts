@@ -27,7 +27,7 @@ export function filterFlow<T, S extends T>(flow: Flow<T>, predicate: (value: T) 
 export function filterFlow<T>(flow: Flow<T>, predicate: (value: T) => unknown): Flow<T>;
 export function filterFlow<T>(flow: Flow<T>, predicate: (value: T) => unknown): Flow<T> {
     return computedFlow((ctx) => {
-        const value = ctx.get(flow);
+        const value = ctx.watch(flow);
         if (!predicate(value)) {
             return ctx.skip();
         }

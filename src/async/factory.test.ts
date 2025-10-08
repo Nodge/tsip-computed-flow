@@ -8,7 +8,7 @@ describe("AsyncComputedFlow factory", () => {
         describe("without param", () => {
             it("should compute and return value", async () => {
                 const source = createAsyncFlow({ status: "success", data: 2 });
-                const flow = asyncComputedFlow(async ({ getAsync }) => {
+                const flow = asyncComputedFlow(async ({ watchAsync: getAsync }) => {
                     return (await getAsync(source)) * 2;
                 });
                 expectTypeOf(flow).toEqualTypeOf<AsyncFlow<number>>();
@@ -19,7 +19,7 @@ describe("AsyncComputedFlow factory", () => {
         describe("with param", () => {
             it("should compute and return value", async () => {
                 const source = createAsyncFlow({ status: "success", data: 2 });
-                const flow = asyncComputedFlow(async ({ getAsync }, param: number) => {
+                const flow = asyncComputedFlow(async ({ watchAsync: getAsync }, param: number) => {
                     return (await getAsync(source)) * param;
                 });
                 expectTypeOf(flow).toEqualTypeOf<(param: number) => AsyncFlow<number>>();
@@ -32,7 +32,7 @@ describe("AsyncComputedFlow factory", () => {
         describe("without param", () => {
             it("should compute and return value", async () => {
                 const source = createAsyncFlow({ status: "success", data: 2 });
-                const flow = asyncComputedFlow(function* ({ getAsync }) {
+                const flow = asyncComputedFlow(function* ({ watchAsync: getAsync }) {
                     return (yield* getAsync(source)) * 2;
                 });
                 expectTypeOf(flow).toEqualTypeOf<AsyncFlow<number>>();
@@ -43,7 +43,7 @@ describe("AsyncComputedFlow factory", () => {
         describe("with param", () => {
             it("should compute and return value", async () => {
                 const source = createAsyncFlow({ status: "success", data: 2 });
-                const flow = asyncComputedFlow(function* ({ getAsync }, param: number) {
+                const flow = asyncComputedFlow(function* ({ watchAsync: getAsync }, param: number) {
                     return (yield* getAsync(source)) * param;
                 });
                 expectTypeOf(flow).toEqualTypeOf<(param: number) => AsyncFlow<number>>();
@@ -55,7 +55,7 @@ describe("AsyncComputedFlow factory", () => {
     describe("memoization", () => {
         it("should return the same instance for equal params", () => {
             const source = createAsyncFlow({ status: "success", data: 2 });
-            const flow = asyncComputedFlow(async ({ getAsync }, param: number) => {
+            const flow = asyncComputedFlow(async ({ watchAsync: getAsync }, param: number) => {
                 return (await getAsync(source)) * param;
             });
 
@@ -70,7 +70,7 @@ describe("AsyncComputedFlow factory", () => {
         it("should compare params with custom function", () => {
             const source = createAsyncFlow({ status: "success", data: 2 });
             const flow = asyncComputedFlow(
-                async ({ getAsync }, param: { id: number; name: string }) => {
+                async ({ watchAsync: getAsync }, param: { id: number; name: string }) => {
                     return (await getAsync(source)) * param.id;
                 },
                 {

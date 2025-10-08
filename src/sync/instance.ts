@@ -57,7 +57,7 @@ export interface ComputedFlowOptions<T> {
  * ```typescript
  * const counter = createFlow(0);
  * const doubled = new ComputedFlow(ctx => {
- *   return ctx.get(counter) * 2;
+ *   return ctx.watch(counter) * 2;
  * });
  *
  * console.log(doubled.getSnapshot()); // 0

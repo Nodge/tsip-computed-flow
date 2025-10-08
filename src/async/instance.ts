@@ -45,7 +45,7 @@ export interface AsyncComputedFlowOptions<T> {
  * ```typescript
  * const userFlow = new AsyncComputedFlow(
  *   async (ctx) => {
- *     const userId = ctx.get(userIdFlow);
+ *     const userId = ctx.watch(userIdFlow);
  *     return await fetchUser(userId);
  *   }
  * );
@@ -111,7 +111,7 @@ export abstract class AsyncComputedFlowBase<T>
      * @example
      * ```typescript
      * const userFlow = new AsyncComputedFlow(async (ctx) => {
-     *   const userId = ctx.get(userIdFlow);
+     *   const userId = ctx.watch(userIdFlow);
      *   return await fetchUser(userId);
      * });
      *

@@ -28,7 +28,7 @@ export function filterAsyncFlow<T, S extends T>(flow: AsyncFlow<T>, predicate: (
 export function filterAsyncFlow<T>(flow: AsyncFlow<T>, predicate: (value: T) => unknown): AsyncFlow<T>;
 export function filterAsyncFlow<T>(flow: AsyncFlow<T>, predicate: (value: T) => unknown): AsyncFlow<T> {
     return asyncComputedFlow(async (ctx) => {
-        const value = await ctx.getAsync(flow);
+        const value = await ctx.watchAsync(flow);
         if (!predicate(value)) {
             return ctx.skip();
         }

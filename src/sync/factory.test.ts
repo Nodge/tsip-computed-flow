@@ -7,8 +7,8 @@ describe("ComputedFlow factory", () => {
     describe("without param", () => {
         it("should compute and return value", () => {
             const source = createFlow(2);
-            const flow = computedFlow(({ get }) => {
-                return get(source) * 2;
+            const flow = computedFlow(({ watch }) => {
+                return watch(source) * 2;
             });
             expectTypeOf(flow).toEqualTypeOf<Flow<number>>();
             expect(flow.getSnapshot()).toBe(4);
@@ -18,8 +18,8 @@ describe("ComputedFlow factory", () => {
     describe("with param", () => {
         it("should compute and return value", () => {
             const source = createFlow(2);
-            const flow = computedFlow(({ get }, param: number) => {
-                return get(source) * param;
+            const flow = computedFlow(({ watch }, param: number) => {
+                return watch(source) * param;
             });
             expectTypeOf(flow).toEqualTypeOf<(param: number) => Flow<number>>();
             expect(flow(5).getSnapshot()).toBe(10);
@@ -29,8 +29,8 @@ describe("ComputedFlow factory", () => {
     describe("memoization", () => {
         it("should return the same instance for equal params", () => {
             const source = createFlow(2);
-            const flow = computedFlow(({ get }, param: number) => {
-                return get(source) * param;
+            const flow = computedFlow(({ watch }, param: number) => {
+                return watch(source) * param;
             });
 
             const instance1 = flow(5);
@@ -44,8 +44,8 @@ describe("ComputedFlow factory", () => {
         it("should compare params with custom function", () => {
             const source = createFlow(2);
             const flow = computedFlow(
-                ({ get }, param: { id: number; name: string }) => {
-                    return get(source) * param.id;
+                ({ watch }, param: { id: number; name: string }) => {
+                    return watch(source) * param.id;
                 },
                 {
                     paramEquals: (a: { id: number; name: string }, b) => a.id === b.id,

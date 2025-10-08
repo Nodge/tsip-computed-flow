@@ -17,10 +17,10 @@ export interface FlowComputationContext {
      *
      * @example
      * ```typescript
-     * const value = get(someFlow); // Reads current value and creates dependency
+     * const value = watch(someFlow); // Reads current value and creates dependency
      * ```
      */
-    readonly get: <T>(flow: Flow<T>) => T;
+    readonly watch: <T>(flow: Flow<T>) => T;
 
     /**
      * Cancels the current computation and prevents the flow value from being updated.
@@ -54,7 +54,7 @@ export class FlowComputation<T> extends FlowComputationBase<T, FlowComputationCo
      */
     public getContext(): FlowComputationContext {
         return {
-            get: (flow) => this.readFlow(flow),
+            watch: (flow) => this.readFlow(flow),
             skip: () => this.skip(),
         };
     }

@@ -88,7 +88,7 @@ export interface ComputedFlowOptions<Data, Param> {
  * @example
  * ```typescript
  * const counter = computedFlow((ctx) => {
- *   return ctx.get(numberFlow) * 2;
+ *   return ctx.watch(numberFlow) * 2;
  * });
  * ```
  */
@@ -109,7 +109,7 @@ export function computedFlow<Data = unknown, Param = never>(
  * @example
  * ```typescript
  * const userProfile = computedFlow((ctx, userId: string) => {
- *   return ctx.get(userFlow(userId));
+ *   return ctx.watch(userFlow(userId));
  * });
  *
  * const johnProfile = userProfile('john123');
