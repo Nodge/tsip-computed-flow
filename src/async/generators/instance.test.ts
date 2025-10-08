@@ -1331,6 +1331,26 @@ describe("AsyncComputedGeneratorFlow", () => {
             expect(value2).toBe(value1);
             expect(listener).toHaveBeenCalledTimes(4); // outdated computation ignored
         });
+
+        it("should allow reading snapshot inside listener", () => {
+            const source = createFlow(0);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ get }) {
+                return get(source);
+            });
+            const spy = vi.fn();
+
+            flow.subscribe(() => {
+                spy(flow.getSnapshot());
+            });
+
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
+            expect(spy).toHaveBeenCalledTimes(0);
+
+            source.emit(1);
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 1 });
+            expect(spy).toHaveBeenNthCalledWith(1, { status: "success", data: 1 });
+            expect(spy).toHaveBeenCalledTimes(1);
+        });
     });
 
     describe("asPromise behavior", () => {
@@ -1547,7 +1567,7 @@ async function nextTick() {
 }
 
 function getSubscriptionsCount(flow: Flow<unknown>): number {
-    // @ts-expect-error в тестах используется реализация, у которой можно прочитать кол-во подписок
+    // @ts-expect-error in tests we use an implementation that allows reading the number of subscriptions
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const subscriptions: Set<unknown> = flow.subscriptions;
     return subscriptions.size;

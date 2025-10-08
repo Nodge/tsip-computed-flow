@@ -1,6 +1,7 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
-import { asyncComputedFlow, type AsyncComputedFlow } from "./factory";
+import type { AsyncFlow } from "@tsip/types";
 import { createAsyncFlow } from "@tsip/flow";
+import { asyncComputedFlow } from "./factory";
 
 describe("AsyncComputedFlow factory", () => {
     describe("promises", () => {
@@ -10,7 +11,7 @@ describe("AsyncComputedFlow factory", () => {
                 const flow = asyncComputedFlow(async ({ getAsync }) => {
                     return (await getAsync(source)) * 2;
                 });
-                expectTypeOf(flow).toEqualTypeOf<AsyncComputedFlow<number>>();
+                expectTypeOf(flow).toEqualTypeOf<AsyncFlow<number>>();
                 await expect(flow.asPromise()).resolves.toBe(4);
             });
         });
@@ -21,7 +22,7 @@ describe("AsyncComputedFlow factory", () => {
                 const flow = asyncComputedFlow(async ({ getAsync }, param: number) => {
                     return (await getAsync(source)) * param;
                 });
-                expectTypeOf(flow).toEqualTypeOf<(param: number) => AsyncComputedFlow<number>>();
+                expectTypeOf(flow).toEqualTypeOf<(param: number) => AsyncFlow<number>>();
                 await expect(flow(5).asPromise()).resolves.toBe(10);
             });
         });
@@ -34,7 +35,7 @@ describe("AsyncComputedFlow factory", () => {
                 const flow = asyncComputedFlow(function* ({ getAsync }) {
                     return (yield* getAsync(source)) * 2;
                 });
-                expectTypeOf(flow).toEqualTypeOf<AsyncComputedFlow<number>>();
+                expectTypeOf(flow).toEqualTypeOf<AsyncFlow<number>>();
                 await expect(flow.asPromise()).resolves.toBe(4);
             });
         });
@@ -45,7 +46,7 @@ describe("AsyncComputedFlow factory", () => {
                 const flow = asyncComputedFlow(function* ({ getAsync }, param: number) {
                     return (yield* getAsync(source)) * param;
                 });
-                expectTypeOf(flow).toEqualTypeOf<(param: number) => AsyncComputedFlow<number>>();
+                expectTypeOf(flow).toEqualTypeOf<(param: number) => AsyncFlow<number>>();
                 await expect(flow(5).asPromise()).resolves.toBe(10);
             });
         });

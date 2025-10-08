@@ -1,6 +1,7 @@
 import { ComputedFlow } from "./instance";
 import type { FlowComputationContext } from "./computation";
 import { memoize } from "../lib/memoize";
+import type { Flow } from "@tsip/types";
 
 /**
  * A function that computes flow's value and don't require parameters.
@@ -94,7 +95,7 @@ export interface ComputedFlowOptions<Data, Param> {
 export function computedFlow<Data = unknown, Param = never>(
     getter: ComputedFlowGetter<Data>,
     options?: ComputedFlowOptions<Data, Param>,
-): ComputedFlow<Data>;
+): Flow<Data>;
 
 /**
  * Creates a parameterized computed flow factory.
@@ -118,7 +119,7 @@ export function computedFlow<Data = unknown, Param = never>(
 export function computedFlow<Data = unknown, Param = never>(
     getter: ComputedFlowGetterWithParam<Data, Param>,
     options?: ComputedFlowOptions<Data, Param>,
-): (param: Param) => ComputedFlow<Data>;
+): (param: Param) => Flow<Data>;
 
 /**
  * Creates a computed flow with automatic parameter detection.
@@ -137,7 +138,7 @@ export function computedFlow<Data = unknown, Param = never>(
 export function computedFlow<Data = unknown, Param = never>(
     getter: ComputedFlowGetter<Data> | ComputedFlowGetterWithParam<Data, Param>,
     options?: ComputedFlowOptions<Data, Param>,
-): ComputedFlow<Data> | ((param: Param) => ComputedFlow<Data>) {
+): Flow<Data> | ((param: Param) => Flow<Data>) {
     if (hasGetterParam(getter)) {
         // Create a memoized factory for parameterized computed flows
         return memoize(

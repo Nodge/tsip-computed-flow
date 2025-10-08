@@ -35,6 +35,7 @@
         "LICENSE",
         "dist"
     ],
+    "sideEffects": false,
     "scripts": {
         "build": "tsup",
         "lint": "eslint .",
@@ -47,9 +48,10 @@
         "@changesets/changelog-github": "0.5.1",
         "@changesets/cli": "2.29.6",
         "@eslint/js": "9.35.0",
-        "@types/eslint": "9.6.1",
         "@tsip/flow": "link:../flow",
         "@tsip/types": "link:../types",
+        "@types/eslint": "9.6.1",
+        "@vitest/coverage-v8": "3.2.4",
         "eslint": "9.35.0",
         "lefthook": "1.12.3",
         "prettier": "3.6.2",

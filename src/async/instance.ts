@@ -122,7 +122,7 @@ export abstract class AsyncComputedFlowBase<T>
      * ```
      */
     public asPromise(): Promise<T> {
-        // Compute the current value to ensure computation is started
+        // Compute the current value to ensure the computation is started
         this.getSnapshot();
 
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- cachedComputation is guaranteed to exist after getSnapshot()
@@ -186,7 +186,7 @@ export abstract class AsyncComputedFlowBase<T>
         // Subscribe to the new list of sources and unsubscribe from previous sources
         super.onComputationFinished(computation);
 
-        // Update data in pending state of any in-progress computation
+        // Update data in the pending state of any in-progress computation
         if (this.cachedComputation !== computation && this.cachedComputation?.getValue().status === "pending") {
             this.cachedComputation.setValue({
                 status: "pending",
@@ -265,12 +265,12 @@ export abstract class AsyncComputedFlowBase<T>
         target.updateSourcesValue();
         this.cachedComputation = target;
 
-        const currentStatus = "pending"; // skipped computation always has 'pending' status
+        const currentStatus = "pending"; // skipped computation always has a 'pending' status
         const targetStatus = target.getValue().status;
 
         const isOutdated = this.currentEpoch > current.epoch;
         if (currentStatus !== targetStatus && !isOutdated) {
-            // Notify flow consumers about reverting the state
+            // Notify flow consumers about the state reversion
             this.onSourcesChanged();
         }
     }

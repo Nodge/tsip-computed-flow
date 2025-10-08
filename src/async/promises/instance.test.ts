@@ -889,7 +889,7 @@ describe("AsyncComputedPromiseFlow", () => {
             // start second computation (C2)
             source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
-            expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
+            expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts a new async computation via getSnapshot()
 
             // finish first computation
             resolvers[1]?.();
@@ -933,7 +933,7 @@ describe("AsyncComputedPromiseFlow", () => {
             // start second computation (C2)
             source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
-            expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
+            expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts a new async computation via getSnapshot()
 
             // finish second computation
             resolvers[2]?.();
@@ -982,7 +982,7 @@ describe("AsyncComputedPromiseFlow", () => {
             // start second computation (C2)
             source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
-            expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
+            expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts a new async computation via getSnapshot()
 
             // finish first computation
             resolvers[1]?.();
@@ -1068,7 +1068,7 @@ describe("AsyncComputedPromiseFlow", () => {
             // start second computation (C2)
             source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
-            expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts new async computation via getSnapshot()
+            expect(listener).toHaveBeenCalledTimes(3); // no transition, but starts a new async computation via getSnapshot()
 
             // finish second computation
             resolvers[2]?.();
@@ -1084,6 +1084,32 @@ describe("AsyncComputedPromiseFlow", () => {
             expect(value2).toEqual({ status: "success", data: 2 });
             expect(value2).toBe(value1);
             expect(listener).toHaveBeenCalledTimes(4); // outdated computation ignored
+        });
+
+        it("should allow reading snapshot inside listener", async () => {
+            const source = createFlow(0);
+            const flow = new AsyncComputedPromiseFlow(async ({ get }) => get(source));
+            const spy = vi.fn();
+
+            flow.subscribe(() => {
+                spy(flow.getSnapshot());
+            });
+
+            expect(flow.getSnapshot()).toEqual({ status: "pending" });
+            expect(spy).toHaveBeenCalledTimes(0);
+            await nextTick();
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
+            expect(spy).toHaveBeenNthCalledWith(1, { status: "success", data: 0 });
+            expect(spy).toHaveBeenCalledTimes(1);
+
+            source.emit(1);
+            expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
+            expect(spy).toHaveBeenNthCalledWith(2, { status: "pending", data: 0 });
+            expect(spy).toHaveBeenCalledTimes(2);
+            await nextTick();
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 1 });
+            expect(spy).toHaveBeenNthCalledWith(3, { status: "success", data: 1 });
+            expect(spy).toHaveBeenCalledTimes(3);
         });
     });
 
@@ -1287,7 +1313,7 @@ async function nextTick() {
 }
 
 function getSubscriptionsCount(flow: Flow<unknown>): number {
-    // @ts-expect-error в тестах используется реализация, у которой можно прочитать кол-во подписок
+    // @ts-expect-error in tests we use an implementation that allows reading the number of subscriptions
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const subscriptions: Set<unknown> = flow.subscriptions;
     return subscriptions.size;

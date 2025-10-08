@@ -100,12 +100,12 @@ export class ComputedFlow<T> extends ComputedFlowBase<T, FlowComputation<T>> imp
             computation.setValue(value);
         } catch (err) {
             if (isAbortError(err)) {
-                // If computation was aborted, try to use cached value first
+                // If computation was aborted, try to use the cached value first
                 if (this.cachedComputation) {
                     return this.cachedComputation;
                 }
 
-                // If no cache available, use initial value if provided
+                // If no cache is available, use the initial value if provided
                 if (hasInitialValue(this.options)) {
                     computation.setValue(this.options.initialValue);
                 } else {

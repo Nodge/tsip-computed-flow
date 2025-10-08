@@ -177,7 +177,7 @@ describe("ComputedFlow", () => {
             // listener2 should not be called during the same notification cycle
             expect(listener2).not.toHaveBeenCalled();
 
-            // Нужно вычитать значение, чтобы сработала следующая нотификация
+            // Need to read the value for the next notification to trigger
             flow.getSnapshot();
 
             // But should be called on the next change
@@ -206,7 +206,7 @@ describe("ComputedFlow", () => {
             expect(listener1).toHaveBeenCalledTimes(1);
             expect(listener2).toHaveBeenCalledTimes(1);
 
-            // Нужно вычитать значение, чтобы сработала следующая нотификация
+            // Need to read the value for the next notification to trigger
             flow.getSnapshot();
 
             source.emit(4);
@@ -232,6 +232,24 @@ describe("ComputedFlow", () => {
 
             expect(listener1).not.toHaveBeenCalled();
             expect(listener2).toHaveBeenCalledTimes(1);
+        });
+
+        it("should allow reading snapshot inside listener", () => {
+            const source = createFlow("");
+            const flow = new ComputedFlow(({ get }) => get(source));
+            const spy = vi.fn();
+
+            flow.subscribe(() => {
+                spy(flow.getSnapshot());
+            });
+
+            expect(flow.getSnapshot()).toBe("");
+            expect(spy).toHaveBeenCalledTimes(0);
+
+            source.emit("a");
+            expect(flow.getSnapshot()).toBe("a");
+            expect(spy).toHaveBeenNthCalledWith(1, "a");
+            expect(spy).toHaveBeenCalledTimes(1);
         });
     });
 
@@ -333,28 +351,28 @@ describe("ComputedFlow", () => {
                 expect(value1).toEqual({ value: "a" });
                 expect(getter).toHaveBeenCalledTimes(1);
 
-                // b не влияет на вычисленяемое значение
+                // b does not affect the computed value
                 b.emit("bb");
                 const value2 = flow.getSnapshot();
                 expect(value2).toBe(value1);
                 expect(value2).toEqual({ value: "a" });
                 expect(getter).toHaveBeenCalledTimes(1);
 
-                // a влияет на вычисленяемое значение
+                // a affects the computed value
                 a.emit("aa");
                 const value3 = flow.getSnapshot();
                 expect(value3).not.toBe(value2);
                 expect(value3).toEqual({ value: "aa" });
                 expect(getter).toHaveBeenCalledTimes(2);
 
-                // переключаемся на альтернативную ветку
+                // switch to the alternative branch
                 source.emit(false);
                 const value4 = flow.getSnapshot();
                 expect(value4).not.toBe(value3);
                 expect(value4).toEqual({ value: "bb" });
                 expect(getter).toHaveBeenCalledTimes(3);
 
-                // a не влияет на вычисленяемое значение
+                // a does not affect the computed value
                 a.emit("aaa");
                 const value5 = flow.getSnapshot();
                 expect(value5).toBe(value4);
@@ -452,28 +470,28 @@ describe("ComputedFlow", () => {
                 expect(value1).toEqual({ value: "a" });
                 expect(getter).toHaveBeenCalledTimes(1);
 
-                // b не влияет на вычисленяемое значение
+                // b does not affect the computed value
                 b.emit("bb");
                 const value2 = flow.getSnapshot();
                 expect(value2).toBe(value1);
                 expect(value2).toEqual({ value: "a" });
                 expect(getter).toHaveBeenCalledTimes(1);
 
-                // a влияет на вычисленяемое значение
+                // a affects the computed value
                 a.emit("aa");
                 const value3 = flow.getSnapshot();
                 expect(value3).not.toBe(value2);
                 expect(value3).toEqual({ value: "aa" });
                 expect(getter).toHaveBeenCalledTimes(2);
 
-                // переключаемся на альтернативную ветку
+                // switch to the alternative branch
                 source.emit(false);
                 const value4 = flow.getSnapshot();
                 expect(value4).not.toBe(value3);
                 expect(value4).toEqual({ value: "bb" });
                 expect(getter).toHaveBeenCalledTimes(3);
 
-                // a не влияет на вычисленяемое значение
+                // a does not affect the computed value
                 a.emit("aaa");
                 const value5 = flow.getSnapshot();
                 expect(value5).toBe(value4);
@@ -609,7 +627,7 @@ describe("ComputedFlow", () => {
             expect(bSubscribe).toHaveBeenCalledTimes(0);
             expect(getSubscriptionsCount(b)).toBe(0);
 
-            // b не влияет на вычисленяемое значение
+            // b does not affect the computed value
             b.emit("bb");
             flow.getSnapshot();
             expect(sourceSubscribe).toHaveBeenCalledTimes(1);
@@ -619,7 +637,7 @@ describe("ComputedFlow", () => {
             expect(bSubscribe).toHaveBeenCalledTimes(0);
             expect(getSubscriptionsCount(b)).toBe(0);
 
-            // a влияет на вычисленяемое значение
+            // a affects the computed value
             a.emit("aa");
             flow.getSnapshot();
             expect(sourceSubscribe).toHaveBeenCalledTimes(2);
@@ -629,7 +647,7 @@ describe("ComputedFlow", () => {
             expect(bSubscribe).toHaveBeenCalledTimes(0);
             expect(getSubscriptionsCount(b)).toBe(0);
 
-            // переключаемся на альтернативную ветку
+            // switch to the alternative branch
             source.emit(false);
             flow.getSnapshot();
             expect(sourceSubscribe).toHaveBeenCalledTimes(3);
@@ -639,7 +657,7 @@ describe("ComputedFlow", () => {
             expect(bSubscribe).toHaveBeenCalledTimes(1);
             expect(getSubscriptionsCount(b)).toBe(1);
 
-            // a не влияет на вычисленяемое значение
+            // a does not affect the computed value
             a.emit("aaa");
             flow.getSnapshot();
             expect(sourceSubscribe).toHaveBeenCalledTimes(3);
@@ -761,8 +779,8 @@ describe("ComputedFlow", () => {
             errorSource.emit(123);
             expect(flow.getSnapshot()).toBe(123);
 
-            // первый вызов происходит при проверке зависимостей, чтобы найти изменения в errorSource
-            // второй вызов происходит при вычислении нового значения потока
+            // second call occurs when checking dependencies to find changes in errorSource
+            // third call occurs when computing the new flow value
             // eslint-disable-next-line @typescript-eslint/unbound-method
             expect(errorSource.getSnapshot).toHaveBeenCalledTimes(3);
         });
@@ -1763,7 +1781,7 @@ describe("ComputedFlow", () => {
 });
 
 function getSubscriptionsCount(flow: Flow<unknown>): number {
-    // @ts-expect-error в тестах используется реализация, у которой можно прочитать кол-во подписок
+    // @ts-expect-error in tests we use an implementation that allows reading the number of subscriptions
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const subscriptions: Set<unknown> = flow.subscriptions;
     return subscriptions.size;

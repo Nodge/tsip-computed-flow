@@ -134,16 +134,7 @@ export abstract class FlowComputationBase<T, C> {
         }
         this.subscriptions.length = 0;
 
-        // NOTE: We don't cleanup this.value and this.lastValues because they continue to be used for change detection
-    }
-
-    /**
-     * Returns the set of flows collected during the computation.
-     *
-     * @returns A read-only set of all flows this computation depends on
-     */
-    public getSources(): ReadonlySet<Flow<unknown>> {
-        return this.sources;
+        // NOTE: We don't clean up this.value and this.lastValues because they continue to be used for change detection
     }
 
     /**

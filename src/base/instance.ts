@@ -163,9 +163,9 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
      * @returns true if recomputation is needed, false otherwise
      */
     private shouldRecompute(): boolean {
-        // Cases for recalculation:
+        // Cases requiring recalculation:
         // 1. If we're not currently tracking sources, the cached value might be stale,
-        //    so we need to check current values in sources (hasListeners flag)
+        //    so we need to check the current values in sources (hasListeners flag)
         // 2. If sources have changed since the last run (isDirty flag)
         return (
             (!this.hasListeners || this.isDirty) &&
@@ -197,7 +197,7 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
         if (this.hasListeners) {
             // Subscribe to the new list of sources
             computation.subscribeToSources(() => {
-                // Verify that the notification came from the current list of sources
+                // Verify that the notification comes from the current list of sources
                 if (this.activeComputation === computation) {
                     this.onSourcesChanged();
                 }

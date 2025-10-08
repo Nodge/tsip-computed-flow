@@ -1,5 +1,5 @@
 import { memoize } from "../lib/memoize";
-import type { AsyncFlowState } from "@tsip/types";
+import type { AsyncFlow, AsyncFlowState } from "@tsip/types";
 import { AsyncComputedPromiseFlow } from "./promises/instance";
 import { AsyncComputedGeneratorFlow } from "./generators/instance";
 import type { AsyncFlowComputationContext } from "./computation";
@@ -157,7 +157,7 @@ export interface AsyncComputedFlowOptions<Data, Param> {
 export function asyncComputedFlow<Data = unknown, Param = never>(
     getter: AsyncComputedPromiseFlowGetter<Data> | AsyncComputedGeneratorFlowGetter<Data>,
     options?: AsyncComputedFlowOptions<Data, Param>,
-): AsyncComputedFlow<Data>;
+): AsyncFlow<Data>;
 
 /**
  * Creates a parameterized asynchronous computed flow factory.
@@ -192,7 +192,7 @@ export function asyncComputedFlow<Data = unknown, Param = never>(
         | AsyncComputedPromiseFlowGetterWithParam<Data, Param>
         | AsyncComputedGeneratorFlowGetterWithParam<Data, Param>,
     options?: AsyncComputedFlowOptions<Data, Param>,
-): (param: Param) => AsyncComputedFlow<Data>;
+): (param: Param) => AsyncFlow<Data>;
 
 /**
  * Creates an asynchronous computed flow.
@@ -211,7 +211,7 @@ export function asyncComputedFlow<Data = unknown, Param = never>(
 export function asyncComputedFlow<Data = unknown, Param = never>(
     getter: AsyncComputedFlowGetter<Data, Param>,
     options?: AsyncComputedFlowOptions<Data, Param>,
-): AsyncComputedFlow<Data> | ((param: Param) => AsyncComputedFlow<Data>) {
+): AsyncFlow<Data> | ((param: Param) => AsyncFlow<Data>) {
     if (hasGetterParam(getter)) {
         // Create a memoized factory for parameterized computed flows
         return memoize(
