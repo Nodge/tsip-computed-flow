@@ -72,10 +72,7 @@ export class AsyncComputedGeneratorFlow<T> extends AsyncComputedFlowBase<T> impl
             let result: IteratorResult<unknown, T> | null = null;
             for (;;) {
                 if (result?.done) {
-                    computation.setValue({
-                        status: "success",
-                        data: result.value,
-                    });
+                    computation.setValue(this.getSuccessValue(result.value));
                     this.onComputationFinished(computation);
                     return computation;
                 }

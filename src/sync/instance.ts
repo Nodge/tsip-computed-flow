@@ -44,7 +44,7 @@ export interface ComputedFlowOptions<T> {
      * equals: (a, b) => deepEqual(a, b)
      * ```
      */
-    equals?: (a: T, b: T) => boolean; // TODO: implement
+    equals?: (a: T, b: T) => boolean;
 }
 
 /**
@@ -96,7 +96,16 @@ export class ComputedFlow<T> extends ComputedFlowBase<T, FlowComputation<T>> imp
     protected compute(): FlowComputation<T> {
         const computation = new FlowComputation<T>();
         try {
-            const value = this.getter(computation.getContext());
+            let value = this.getter(computation.getContext());
+
+            if (
+                this.options?.equals &&
+                this.cachedComputation &&
+                this.options.equals(value, this.cachedComputation.getValue())
+            ) {
+                value = this.cachedComputation.getValue();
+            }
+
             computation.setValue(value);
         } catch (err) {
             if (isAbortError(err)) {

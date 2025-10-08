@@ -1287,6 +1287,45 @@ describe("AsyncComputedPromiseFlow", () => {
         });
     });
 
+    describe("custom equality", () => {
+        it("should cache with custom result equality check", async () => {
+            const id = createFlow("id-1");
+            const value = createFlow(0);
+
+            const flow = new AsyncComputedPromiseFlow(
+                async ({ get }) => {
+                    return {
+                        id: get(id),
+                        value: get(value),
+                    };
+                },
+                {
+                    equals(a, b) {
+                        return a.id === b.id;
+                    },
+                },
+            );
+
+            const v1 = await flow.asPromise();
+            expect(v1).toEqual({ id: "id-1", value: 0 });
+
+            value.emit(1);
+            const v2 = await flow.asPromise();
+            expect(v2).toBe(v1);
+            expect(v2).toEqual({ id: "id-1", value: 0 });
+
+            id.emit("id-2");
+            const v3 = await flow.asPromise();
+            expect(v3).not.toBe(v2);
+            expect(v3).toEqual({ id: "id-2", value: 1 });
+
+            value.emit(1);
+            const v4 = await flow.asPromise();
+            expect(v4).toBe(v3);
+            expect(v4).toEqual({ id: "id-2", value: 1 });
+        });
+    });
+
     describe("side effects detection", () => {
         // side effects in getter (only for sync part)
         // reading in notify
@@ -1297,11 +1336,6 @@ describe("AsyncComputedPromiseFlow", () => {
         // detects trivial cycles
         // detects slightly larger cycles
         // detects depending on self
-        it("");
-    });
-
-    describe("custom equality", () => {
-        // todo
         it("");
     });
 });

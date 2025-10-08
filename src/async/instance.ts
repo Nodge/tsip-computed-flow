@@ -32,7 +32,7 @@ export interface AsyncComputedFlowOptions<T> {
      * equals: (a, b) => deepEqual(a, b)
      * ```
      */
-    equals?: (a: T, b: T) => boolean; // TODO: implement
+    equals?: (a: T, b: T) => boolean;
 }
 
 /**
@@ -285,5 +285,23 @@ export abstract class AsyncComputedFlowBase<T>
         if (index > -1) {
             this.pendingComputations.splice(index, 1);
         }
+    }
+
+    /**
+     * Creates a success state for the given data, optionally reusing the previous state
+     * if the data is equal according to the custom equality function.
+     *
+     * @param data - The successfully computed data
+     * @returns An AsyncFlowState with status "success" and the provided data
+     */
+    protected getSuccessValue(data: T): AsyncFlowState<T> {
+        if (this.options?.equals && this.lastFinishedComputation) {
+            const lastValue = this.lastFinishedComputation.getValue();
+            if (lastValue.status === "success" && this.options.equals(data, lastValue.data)) {
+                return lastValue;
+            }
+        }
+
+        return { status: "success", data };
     }
 }

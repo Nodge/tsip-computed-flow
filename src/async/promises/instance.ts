@@ -48,10 +48,7 @@ export class AsyncComputedPromiseFlow<T> extends AsyncComputedFlowBase<T> implem
         try {
             this.getter(computation.getContext()).then(
                 (data) => {
-                    computation.setValue({
-                        status: "success",
-                        data,
-                    });
+                    computation.setValue(this.getSuccessValue(data));
                     this.onComputationFinished(computation);
                 },
                 (error: unknown) => {
