@@ -11,7 +11,7 @@ jobs:
     release:
         name: Release
         # prevents this action from running on forks
-        if: github.repository == 'nodge/tsip-computed'
+        if: github.repository == 'nodge/tsip-computed-flow'
         permissions:
             contents: write # to create release
             issues: write # to post issue comments
@@ -37,7 +37,7 @@ jobs:
                   title: "Upcoming Release"
                   commit: "chore(release): version bump"
                   version: pnpm exec changeset version
-                  publish: pnpm run build && pnpm exec changeset publish
+                  publish: pnpm run ci:release
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,32 +1,50 @@
 {
-    "name": "@tsip/computed",
+    "name": "@tsip/computed-flow",
     "version": "0.0.0",
-    "description": "",
-    "keywords": [],
+    "description": "Computed reactive data flows with automatic dependency tracking, async support, and parameterized computations. Built on TypeScript Interface Proposals (TSIP) for seamless compatibility.",
+    "keywords": [
+        "reactive",
+        "computed",
+        "flow",
+        "reactive-programming",
+        "state-management",
+        "typescript",
+        "tsip",
+        "async",
+        "dependency-tracking",
+        "memoization",
+        "observable",
+        "streams",
+        "data-flow",
+        "signals"
+    ],
     "author": "Maksim Zemskov <maxaz74@gmail.com>",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/nodge/tsip-computed/issues"
+        "url": "https://github.com/nodge/tsip-computed-flow/issues"
     },
-    "homepage": "https://github.com/nodge/tsip-computed",
+    "homepage": "https://github.com/nodge/tsip-computed-flow",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/nodge/tsip-computed.git"
+        "url": "git+https://github.com/nodge/tsip-computed-flow.git"
     },
     "engines": {
         "node": ">=18"
     },
-    "packageManager": "pnpm@10.16.0",
+    "packageManager": "pnpm@10.18.2",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {
-        "import": {
-            "types": "./dist/index.d.mts",
-            "default": "./dist/index.mjs"
-        },
-        "require": {
-            "types": "./dist/index.d.ts",
-            "default": "./dist/index.js"
+        "./package.json": "./package.json",
+        ".": {
+            "import": {
+                "types": "./dist/index.d.mts",
+                "default": "./dist/index.mjs"
+            },
+            "default": {
+                "types": "./dist/index.d.ts",
+                "default": "./dist/index.js"
+            }
         }
     },
     "files": [
@@ -42,22 +60,23 @@
         "fmt": "prettier --write . --log-level error",
         "test": "vitest",
         "typecheck": "tsc --noEmit",
-        "changeset": "changeset add"
+        "changeset": "changeset add",
+        "ci:release": "pnpm run build && pnpm exec changeset publish"
     },
     "devDependencies": {
         "@changesets/changelog-github": "0.5.1",
-        "@changesets/cli": "2.29.6",
-        "@eslint/js": "9.35.0",
-        "@tsip/flow": "link:../flow",
-        "@tsip/types": "link:../types",
+        "@changesets/cli": "2.29.7",
+        "@eslint/js": "9.36.0",
+        "@tsip/flow": "0.1.0",
+        "@tsip/types": "0.2.0",
         "@types/eslint": "9.6.1",
         "@vitest/coverage-v8": "3.2.4",
-        "eslint": "9.35.0",
-        "lefthook": "1.12.3",
+        "eslint": "9.36.0",
+        "lefthook": "1.13.4",
         "prettier": "3.6.2",
         "tsup": "8.5.0",
         "typescript": "5.9.2",
-        "typescript-eslint": "8.42.0",
+        "typescript-eslint": "8.44.1",
         "vitest": "3.2.4"
     }
 }

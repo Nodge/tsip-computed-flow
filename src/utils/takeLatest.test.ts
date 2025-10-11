@@ -14,8 +14,8 @@ describe("takeLatest", () => {
         const resolvers: (() => void)[] = [];
 
         const flow = takeLatest(
-            asyncComputedFlow(async ({ get }) => {
-                const value = get(source);
+            asyncComputedFlow(async ({ watch }) => {
+                const value = watch(source);
                 await new Promise<void>((r) => resolvers.push(r));
                 return value;
             }),
@@ -57,8 +57,8 @@ describe("takeLatest", () => {
         const resolvers: (() => void)[] = [];
 
         const flow = takeLatest(
-            asyncComputedFlow(async ({ get }) => {
-                const value = get(source);
+            asyncComputedFlow(async ({ watch }) => {
+                const value = watch(source);
                 await new Promise<void>((r) => resolvers.push(r));
                 return value;
             }),

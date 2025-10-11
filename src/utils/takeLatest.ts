@@ -21,7 +21,7 @@ import { asyncComputedFlow } from "../async/factory";
  * const searchQuery = createFlow('');
  * const searchResults = takeLatest(
  *   asyncComputedFlow(async (ctx) => {
- *     const query = ctx.get(searchQuery);
+ *     const query = ctx.watch(searchQuery);
  *     return await searchAPI(query);
  *   })
  * );
@@ -37,7 +37,7 @@ import { asyncComputedFlow } from "../async/factory";
  */
 export function takeLatest<T>(flow: AsyncFlow<T>): AsyncFlow<T> {
     return asyncComputedFlow(async (ctx) => {
-        const value = await ctx.getAsync(flow);
+        const value = await ctx.watchAsync(flow);
         ctx.signal.throwIfAborted();
         return value;
     });
