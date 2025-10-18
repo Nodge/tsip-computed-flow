@@ -1,5 +1,11 @@
 # @tsip/computed-flow
 
+## 0.1.1
+
+### Patch Changes
+
+- [#2](https://github.com/Nodge/tsip-computed-flow/pull/2) [`b5e2e2c`](https://github.com/Nodge/tsip-computed-flow/commit/b5e2e2c90266ba913bd12b6a3193885885edee95) Thanks [@Nodge](https://github.com/Nodge)! - Fix TypeScript declaration file generation by enabling DTS resolution in tsup config. This removes the dependency on the `@tsip/types` package.
+
 ## 0.1.0
 
 ### Minor Changes
