@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, expectTypeOf } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, expectTypeOf } from "vitest";
 import { memoize } from "./memoize";
 
 describe("memoize", () => {
@@ -226,4 +226,176 @@ describe("memoize", () => {
             expect(result3).not.toBe(result5);
         });
     });
+
+    describe("garbage collection", () => {
+        beforeEach(async () => {
+            await triggerGC();
+        });
+
+        it("should allow cached objects to be garbage collected when no longer referenced", async () => {
+            const fn = (x: number) => ({ value: x * 2 });
+            const memoized = memoize(fn);
+
+            // Create a reference we can track
+            let obj: { value: number } | null = memoized(42);
+            const weakRef = new WeakRef(obj);
+
+            // Verify object is initially alive
+            expect(weakRef.deref()).toBe(obj);
+            expect(obj.value).toBe(84);
+
+            // Remove the strong reference
+            obj = null;
+
+            // Trigger garbage collection
+            await triggerGC();
+
+            // The object should be collected
+            expect(isCollected(weakRef)).toBe(true);
+        });
+
+        it("should clean up cache entries after objects are garbage collected", async () => {
+            let callCount = 0;
+            const fn = (x: number) => {
+                callCount++;
+                return { value: x * 2 };
+            };
+            const memoized = memoize(fn);
+
+            // First call creates and caches the object
+            let obj1: { value: number } | null = memoized(10);
+            expect(callCount).toBe(1);
+            expect(obj1.value).toBe(20);
+
+            // Second call with same param returns cached object
+            let obj2: { value: number } | null = memoized(10);
+            expect(callCount).toBe(1);
+            expect(obj2).toBe(obj1);
+
+            // Remove strong reference
+            obj1 = null;
+            obj2 = null;
+
+            // Trigger garbage collection
+            await triggerGC();
+
+            // Calling again with same param should create a new object
+            // because the cached one was collected
+            const obj3 = memoized(10);
+            expect(callCount).toBe(2);
+            expect(obj3.value).toBe(20);
+        });
+
+        it("should maintain cache while objects are still referenced", async () => {
+            let callCount = 0;
+            const fn = (x: number) => {
+                callCount++;
+                return { value: x * 2 };
+            };
+            const memoized = memoize(fn);
+
+            // Keep a strong reference
+            const obj1 = memoized(5);
+            expect(callCount).toBe(1);
+
+            // Trigger GC
+            await triggerGC();
+
+            // Object should still be cached (not collected)
+            const obj2 = memoized(5);
+            expect(callCount).toBe(1);
+            expect(obj2).toBe(obj1);
+        });
+
+        it("should handle multiple cached objects independently", async () => {
+            let callCount = 0;
+            const fn = (x: number) => {
+                callCount++;
+                return { value: x };
+            };
+            const memoized = memoize(fn);
+
+            // Create multiple cached objects
+            let obj1: { value: number } | null = memoized(1);
+            let obj2: { value: number } | null = memoized(2);
+            const obj3 = memoized(3);
+
+            const weakRef1 = new WeakRef(obj1);
+            const weakRef2 = new WeakRef(obj2);
+            const weakRef3 = new WeakRef(obj3);
+
+            expect(callCount).toBe(3);
+
+            // Remove some references but not all
+            obj1 = null;
+            obj2 = null;
+
+            await triggerGC();
+
+            // obj1 and obj2 should be collected
+            expect(isCollected(weakRef1)).toBe(true);
+            expect(isCollected(weakRef2)).toBe(true);
+
+            // obj3 should still be alive
+            expect(isCollected(weakRef3)).toBe(false);
+            expect(weakRef3.deref()).toBe(obj3);
+
+            // Calling with collected params should create new objects
+            memoized(1);
+            memoized(2);
+            expect(callCount).toBe(5);
+
+            // Calling with still-referenced param should return cached object
+            const sameObj3 = memoized(3);
+            expect(callCount).toBe(5);
+            expect(sameObj3).toBe(obj3);
+        });
+
+        it("should not leak memory with custom equals function", async () => {
+            let callCount = 0;
+            const fn = (obj: { id: number }) => {
+                callCount++;
+                return { result: obj.id * 2 };
+            };
+
+            const memoized = memoize(fn, {
+                equals: (a, b) => a.id === b.id,
+            });
+
+            // Create and cache an object
+            let result: { result: number } | null = memoized({ id: 1 });
+            expect(callCount).toBe(1);
+            expect(result.result).toBe(2);
+
+            const weakRef = new WeakRef(result);
+
+            // Remove reference
+            result = null;
+
+            await triggerGC();
+
+            // Should be collected
+            expect(isCollected(weakRef)).toBe(true);
+
+            // New call with equivalent param should create new object
+            const newResult = memoized({ id: 1 });
+            expect(callCount).toBe(2);
+            expect(newResult.result).toBe(2);
+        });
+    });
 });
+
+// Helper to trigger garbage collection if available
+async function triggerGC() {
+    // Run GC multiple times to ensure cleanup
+    for (let i = 0; i < 5; i++) {
+        global.gc();
+        // Give time for FinalizationRegistry callbacks
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+}
+
+// Helper to check if a WeakRef has been collected
+function isCollected(ref: WeakRef<object>): boolean {
+    return ref.deref() === undefined;
+}
