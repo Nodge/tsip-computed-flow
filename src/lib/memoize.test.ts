@@ -77,6 +77,19 @@ describe("memoize", () => {
             expect(result1).toBe(result2);
             expect(result1).not.toBe(result3);
         });
+
+        it("should correctly handle param=undefined", () => {
+            const fn = vi.fn((x: number | undefined) => ({ value: x ?? 10 * 2 }));
+            const memoized = memoize(fn);
+
+            const result1 = memoized(undefined);
+            const result2 = memoized(undefined);
+
+            expect(fn).toHaveBeenCalledTimes(1);
+            expect(fn).toHaveBeenCalledWith(undefined);
+            expect(result1).toBe(result2); // Same object reference
+            expect(result1.value).toBe(20);
+        });
     });
 
     describe("custom equals function", () => {
@@ -143,6 +156,21 @@ describe("memoize", () => {
             expect(result1).toBe(result2);
             expect(result2).toBe(result3);
             expect(result1.value).toBe(1);
+        });
+
+        it("should correctly handle param=undefined", () => {
+            const fn = vi.fn((x: number | undefined) => ({ value: x ?? 10 * 2 }));
+            const memoized = memoize(fn, {
+                // should always return new value
+                equals: () => false,
+            });
+
+            const result1 = memoized(undefined);
+            const result2 = memoized(undefined);
+
+            expect(fn).toHaveBeenCalledTimes(2);
+            expect(fn).toHaveBeenCalledWith(undefined);
+            expect(result1).not.toBe(result2);
         });
     });
 
