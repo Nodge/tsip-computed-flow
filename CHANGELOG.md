@@ -1,5 +1,11 @@
 # @tsip/computed-flow
 
+## 0.1.2
+
+### Patch Changes
+
+- [#5](https://github.com/Nodge/tsip-computed-flow/pull/5) [`3436be4`](https://github.com/Nodge/tsip-computed-flow/commit/3436be48477db5d4147f29f020e8e4015738ade3) Thanks [@Nodge](https://github.com/Nodge)! - Fix false-positive memoize cache hit when the param is `undefined`.
+
 ## 0.1.1
 
 ### Patch Changes
