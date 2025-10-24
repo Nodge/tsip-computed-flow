@@ -1,4 +1,25 @@
+/**
+ * Configuration options for memoization behavior.
+ *
+ * @typeParam T - The parameter type for comparison
+ */
 interface MemoizationOptions<T> {
+    /**
+     * Custom equality function for comparing function parameters.
+     * When provided, this function determines whether two parameter values should be considered equal,
+     * allowing cache hits for semantically equivalent but not strictly equal parameters.
+     *
+     * @param a - The first parameter value to compare
+     * @param b - The second parameter value to compare
+     * @returns `true` if the parameters are considered equal, `false` otherwise
+     *
+     * @example
+     * ```ts
+     * const options = {
+     *   equals: (a, b) => a.id === b.id
+     * };
+     * ```
+     */
     equals?: (a: T, b: T) => boolean;
 }
 
@@ -6,11 +27,10 @@ interface MemoizationOptions<T> {
  * Creates a memoized version of a function that caches object results using WeakRef.
  * The cache automatically cleans up when objects are garbage collected.
  *
- * @template T - The return type of the function (must be an object)
- * @template P - The parameter type of the function
+ * @typeParam T - The return type of the function (must be an object)
+ * @typeParam P - The parameter type of the function
  * @param fn - The function to memoize
  * @param options - Optional configuration
- * @param options.equals - Custom equality function for comparing parameters
  * @returns A memoized version of the input function
  *
  * @example
@@ -37,12 +57,13 @@ export function memoize<T extends object, P = never>(
     fn: (param?: P) => T,
     options?: MemoizationOptions<P>,
 ): (param?: P) => T {
-    type Key = P | undefined;
+    type Key = P | symbol | undefined;
 
     const cache = new Map<Key, WeakRef<T>>();
     const registry = new FinalizationRegistry((key: Key) => {
         cache.delete(key);
     });
+    const notFound = Symbol();
 
     const findKey = (param: Key): Key => {
         if (!options?.equals) {
@@ -55,7 +76,7 @@ export function memoize<T extends object, P = never>(
             }
         }
 
-        return undefined;
+        return notFound;
     };
 
     return (param?: Key) => {
