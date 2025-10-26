@@ -833,6 +833,30 @@ describe("AsyncComputedPromiseFlow", () => {
             expect(listener).toHaveBeenCalledTimes(3); // pending->success transition
         });
 
+        it("should notify subscribers added after the first computation finished", async () => {
+            const source = createAsyncFlow({ status: "success", data: 1 });
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync }) => (await getAsync(source)) * 2);
+            const listener = vi.fn();
+
+            expect(flow.getSnapshot()).toEqual({ status: "pending" });
+
+            await nextTick();
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 2 });
+
+            flow.subscribe(listener);
+            await nextTick();
+            expect(listener).toHaveBeenCalledTimes(0);
+
+            source.emit({ status: "success", data: 3 });
+            expect(flow.getSnapshot()).toEqual({ status: "pending", data: 2 });
+            expect(listener).toHaveBeenCalledTimes(1); // success->pending transition
+
+            flow.getSnapshot();
+            await nextTick();
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 6 });
+            expect(listener).toHaveBeenCalledTimes(2); // pending->success transition
+        });
+
         it("should notify subscribers about computation error", async () => {
             const flow = new AsyncComputedPromiseFlow(async () => {
                 throw new Error();

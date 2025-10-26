@@ -107,6 +107,21 @@ describe("ComputedFlow", () => {
             expect(listener).toHaveBeenCalledWith();
         });
 
+        it("should notify subscribers added after the first computation finished", () => {
+            const source = createFlow(1);
+            const flow = new ComputedFlow(({ watch }) => watch(source) * 2);
+            const listener = vi.fn();
+
+            expect(flow.getSnapshot()).toBe(2);
+
+            flow.subscribe(listener);
+            expect(listener).toHaveBeenCalledTimes(0);
+
+            source.emit(3);
+            expect(listener).toHaveBeenCalledTimes(1);
+            expect(listener).toHaveBeenCalledWith();
+        });
+
         it("should notify multiple subscribers", () => {
             const source = createFlow(1);
             const flow = new ComputedFlow(({ watch }) => watch(source) * 2);
