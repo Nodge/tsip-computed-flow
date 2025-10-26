@@ -9,7 +9,7 @@ A TypeScript implementation of computed reactive flows based on the [TypeScript 
 - **Automatic Dependency Tracking**: Computed flows automatically track their dependencies and recompute when needed
 - **Parameterized Computations**: Create computed flows that accept parameters with automatic memoization
 - **Async Support**: Handle asynchronous computations, including tracking of async dependencies
-- **Lightweight**: Zero dependencies and only 2.8KB minified+gzipped
+- **Lightweight**: Zero dependencies and only 2.7KB minified+gzipped
 - **Universal**: Works in Node.js, browsers, and any JavaScript environment
 
 ## Installation

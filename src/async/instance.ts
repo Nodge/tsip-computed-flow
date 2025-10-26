@@ -88,6 +88,11 @@ export abstract class AsyncComputedFlowBase<T>
     private currentEpoch = 0;
 
     /**
+     * Cached promise returned from the asPromise()
+     */
+    private promise: Promise<T> | null = null;
+
+    /**
      * Creates a new AsyncComputedFlow instance.
      *
      * @param options - Optional configuration for this computed flow
@@ -122,11 +127,41 @@ export abstract class AsyncComputedFlowBase<T>
      * ```
      */
     public asPromise(): Promise<T> {
-        // Compute the current value to ensure the computation is started
-        this.getSnapshot();
+        const initialState = this.getSnapshot();
 
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- cachedComputation is guaranteed to exist after getSnapshot()
-        return this.cachedComputation!.getPromise();
+        this.promise ??= new Promise<T>((resolve, reject) => {
+            if (initialState.status === "success") {
+                resolve(initialState.data);
+                return;
+            }
+
+            if (initialState.status === "error") {
+                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- Intentionally preserve the original error to avoid transformations that could break user error handling
+                reject(initialState.error);
+                return;
+            }
+
+            const subscription = this.subscribe(() => {
+                const state = this.getSnapshot();
+
+                // still loading, wait for the next value
+                if (state.status === "pending") {
+                    return;
+                }
+
+                subscription.unsubscribe();
+
+                if (state.status === "error") {
+                    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- Intentionally preserve the original error to avoid transformations that could break user error handling
+                    reject(state.error);
+                    return;
+                }
+
+                resolve(state.data);
+            });
+        });
+
+        return this.promise;
     }
 
     /**
@@ -164,6 +199,10 @@ export abstract class AsyncComputedFlowBase<T>
     protected onComputationStarted(computation: AsyncFlowComputation<T>): void {
         this.pendingComputations.at(-1)?.abort();
         this.pendingComputations.push(computation);
+
+        if (this.cachedComputation && this.promise && this.cachedComputation.getValue().status !== "pending") {
+            this.promise = null;
+        }
     }
 
     /**

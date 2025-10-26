@@ -113,12 +113,13 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
         if (!this.hasListeners) {
             this.hasListeners = true;
 
-            // If there were no previous subscribers, we weren't tracking flow sources
-            // We need to run computation to determine the current list of sources to subscribe to
-            try {
-                this.getSnapshot();
-            } catch {
-                // The error will be delivered via getSnapshot call by flow's consumer
+            if (this.cachedComputation) {
+                this.subscribeToSources(this.cachedComputation);
+            } else {
+                // If there were no previous computations, it means we were not tracking the flow sources
+                // We need to perform a computation to determine the current list of sources for subscription
+                this.cachedComputation = this.compute();
+                this.isDirty = false;
             }
         }
 
@@ -188,23 +189,32 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
      * @param computation - The computation that was just completed
      */
     protected onComputationFinished(computation: FlowComputation) {
+        if (this.hasListeners) {
+            this.subscribeToSources(computation);
+        }
+    }
+
+    /**
+     * Subscribes to source flows for the given computation.
+     *
+     * @param computation - The computation whose sources should be subscribed to
+     */
+    private subscribeToSources(computation: FlowComputation) {
         if (this.activeComputation) {
             // Unsubscribe from the previous list of sources
             this.activeComputation.dispose();
             this.activeComputation = null;
         }
 
-        if (this.hasListeners) {
-            // Subscribe to the new list of sources
-            computation.subscribeToSources(() => {
-                // Verify that the notification comes from the current list of sources
-                if (this.activeComputation === computation) {
-                    this.onSourcesChanged();
-                }
-            });
+        // Subscribe to the new list of sources
+        computation.subscribeToSources(() => {
+            // Verify that the notification comes from the current active computation
+            if (this.activeComputation === computation) {
+                this.onSourcesChanged();
+            }
+        });
 
-            this.activeComputation = computation;
-        }
+        this.activeComputation = computation;
     }
 
     /**
@@ -219,21 +229,14 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
 
     /**
      * Notifies all subscribers about changes in the flow's value.
-     * @throws {AggregateError} When one or more listeners throw errors
      */
     protected notify(): void {
-        const errors: unknown[] = [];
-
         for (const subscription of this.subscriptions) {
             try {
                 subscription.listener();
             } catch (error) {
-                errors.push(error);
+                console.error(new Error("Failed to call flow listener", { cause: error }));
             }
-        }
-
-        if (errors.length > 0) {
-            throw new AggregateError(errors, "Failed to call flow listeners");
         }
     }
 }
