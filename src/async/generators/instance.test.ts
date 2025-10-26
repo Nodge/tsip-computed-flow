@@ -1,10 +1,22 @@
 /* eslint-disable require-yield */
 import { createFlow, createAsyncFlow } from "@tsip/flow";
 import type { AsyncFlow, AsyncFlowState, Flow } from "@tsip/types";
-import { describe, it, expect, vi, expectTypeOf } from "vitest";
+import { describe, it, expect, vi, expectTypeOf, afterEach, beforeEach } from "vitest";
 import { AsyncComputedGeneratorFlow } from "./instance";
+import { validateAsyncFlowImplementation } from "../../../../types/dist/tests.mjs";
 
 describe("AsyncComputedGeneratorFlow", () => {
+    beforeEach(() => {
+        vi.spyOn(console, "error").mockImplementation(() => {
+            // noop
+        });
+    });
+
+    afterEach(() => {
+        expect(console.error).not.toHaveBeenCalled();
+        vi.mocked(console.error).mockClear();
+    });
+
     describe("types", () => {
         it("should infer return type", () => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1591,6 +1603,73 @@ describe("AsyncComputedGeneratorFlow", () => {
         // detects slightly larger cycles
         // detects depending on self
         it("");
+    });
+
+    describe("AsyncFlow interface", () => {
+        afterEach(() => {
+            vi.mocked(console.error).mockClear();
+        });
+
+        validateAsyncFlowImplementation({
+            testRunner: { describe, it },
+            createFlow: async () => {
+                let i = 0;
+                const source = createFlow<Promise<number>>(Promise.resolve(i));
+
+                const flow = new AsyncComputedGeneratorFlow(function* ({ watch }) {
+                    const promise = watch(source);
+                    let value = -1;
+                    yield promise.then((result) => {
+                        value = result;
+                    });
+                    return { value };
+                });
+
+                // Read the flow on each change, since computed flow is evaluated lazily,
+                // and in tests no one is subscribed to the flow
+                flow.subscribe(() => {
+                    queueMicrotask(() => {
+                        flow.getSnapshot();
+                    });
+                });
+
+                // Wait for the first computation to complete to avoid the initial pending state in tests
+                await flow.asPromise();
+
+                return {
+                    flow,
+                    startAsyncOperation() {
+                        const { promise, resolve, reject } = Promise.withResolvers<number>();
+                        const value = ++i;
+
+                        source.emit(promise);
+
+                        // start the actual computation
+                        flow.getSnapshot();
+
+                        return {
+                            async emitSuccess() {
+                                resolve(value);
+
+                                // wait for flow computation
+                                await nextTick();
+
+                                return { value };
+                            },
+                            async emitError() {
+                                const error = new Error("test error");
+                                reject(error);
+
+                                // wait for flow computation
+                                await nextTick();
+
+                                return error;
+                            },
+                        };
+                    },
+                };
+            },
+        });
     });
 });
 

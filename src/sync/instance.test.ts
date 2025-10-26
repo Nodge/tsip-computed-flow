@@ -1,10 +1,22 @@
 import { createFlow } from "@tsip/flow";
 import type { Flow, FlowSubscription, MutableFlow } from "@tsip/types";
-import { describe, it, expect, vi, expectTypeOf } from "vitest";
+import { validateFlowImplementation } from "@tsip/types/tests";
+import { describe, it, expect, vi, expectTypeOf, beforeEach, afterEach } from "vitest";
 import { ComputedFlow } from "./instance";
 import type { FlowComputationContext } from "./computation";
 
 describe("ComputedFlow", () => {
+    beforeEach(() => {
+        vi.spyOn(console, "error").mockImplementation(() => {
+            // noop
+        });
+    });
+
+    afterEach(() => {
+        expect(console.error).not.toHaveBeenCalled();
+        vi.mocked(console.error).mockClear();
+    });
+
     describe("types", () => {
         it("should infer return type", () => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1813,6 +1825,35 @@ describe("ComputedFlow", () => {
         // detects slightly larger cycles
         // detects depending on self
         it("");
+    });
+
+    describe("Flow interface", () => {
+        afterEach(() => {
+            vi.mocked(console.error).mockClear();
+        });
+
+        validateFlowImplementation({
+            testRunner: { describe, it },
+            createFlow: () => {
+                let i = 0;
+                const source = createFlow(i);
+                const flow = new ComputedFlow(({ watch }) => {
+                    return { value: watch(source) };
+                });
+                return {
+                    flow,
+                    emitNext() {
+                        const value = ++i;
+                        source.emit(value);
+
+                        // compute the value
+                        flow.getSnapshot();
+
+                        return { value };
+                    },
+                };
+            },
+        });
     });
 });
 
