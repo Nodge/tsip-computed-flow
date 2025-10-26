@@ -1,9 +1,9 @@
 /* eslint-disable require-yield */
 import { createFlow, createAsyncFlow } from "@tsip/flow";
 import type { AsyncFlow, AsyncFlowState, Flow } from "@tsip/types";
+import { validateAsyncFlowImplementation } from "@tsip/types/tests";
 import { describe, it, expect, vi, expectTypeOf, afterEach, beforeEach } from "vitest";
 import { AsyncComputedGeneratorFlow } from "./instance";
-import { validateAsyncFlowImplementation } from "../../../../types/dist/tests.mjs";
 
 describe("AsyncComputedGeneratorFlow", () => {
     beforeEach(() => {

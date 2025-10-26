@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/require-await */
 import { createFlow, createAsyncFlow } from "@tsip/flow";
 import type { AsyncFlow, AsyncFlowState, Flow } from "@tsip/types";
+import { validateAsyncFlowImplementation } from "@tsip/types/tests";
 import { describe, it, expect, vi, expectTypeOf, beforeEach, afterEach } from "vitest";
 import { AsyncComputedPromiseFlow } from "./instance";
-import { validateAsyncFlowImplementation } from "../../../../types/dist/tests.mjs";
 
 describe("AsyncComputedPromiseFlow", () => {
     beforeEach(() => {
