@@ -1,6 +1,6 @@
 {
     "name": "@tsip/computed-flow",
-    "version": "0.1.2",
+    "version": "0.2.0",
     "description": "Computed reactive data flows with automatic dependency tracking, async support, and parameterized computations. Built on TypeScript Interface Proposals (TSIP) for seamless compatibility.",
     "keywords": [
         "reactive",
