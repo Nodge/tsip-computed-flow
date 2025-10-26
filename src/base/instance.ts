@@ -229,21 +229,14 @@ export abstract class ComputedFlowBase<T, FlowComputation extends FlowComputatio
 
     /**
      * Notifies all subscribers about changes in the flow's value.
-     * @throws {AggregateError} When one or more listeners throw errors
      */
     protected notify(): void {
-        const errors: unknown[] = [];
-
         for (const subscription of this.subscriptions) {
             try {
                 subscription.listener();
             } catch (error) {
-                errors.push(error);
+                console.error(new Error("Failed to call flow listener", { cause: error }));
             }
-        }
-
-        if (errors.length > 0) {
-            throw new AggregateError(errors, "Failed to call flow listeners");
         }
     }
 }

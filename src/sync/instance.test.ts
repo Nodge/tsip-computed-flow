@@ -814,7 +814,7 @@ describe("ComputedFlow", () => {
     });
 
     describe("subscriptions error handling", () => {
-        it("should catch errors from listeners and throw AggregateError", () => {
+        it("should catch errors from listeners and log them", () => {
             const error1 = new Error("Listener 1 error");
             const error2 = new Error("Listener 2 error");
 
@@ -827,17 +827,23 @@ describe("ComputedFlow", () => {
                 throw error2;
             });
 
-            expect(() => {
-                source.emit(1);
-            }).toThrow(AggregateError);
+            source.emit(1);
 
-            try {
-                source.emit(1);
-            } catch (aggregateError) {
-                expect(aggregateError).toBeInstanceOf(AggregateError);
-                expect((aggregateError as AggregateError).message).toBe("Failed to call flow listeners");
-                expect((aggregateError as AggregateError).errors).toEqual([error1, error2]);
-            }
+            expect(console.error).toHaveBeenCalledTimes(2);
+            expect(console.error).toHaveBeenNthCalledWith(1, expect.any(Error));
+            expect(console.error).toHaveBeenNthCalledWith(2, expect.any(Error));
+
+            const first = vi.mocked(console.error).mock.calls[0]?.[0] as Error;
+            expect(first).toBeInstanceOf(Error);
+            expect(first.message).toBe("Failed to call flow listener");
+            expect(first.cause).toBe(error1);
+
+            const second = vi.mocked(console.error).mock.calls[1]?.[0] as Error;
+            expect(second).toBeInstanceOf(Error);
+            expect(second.message).toBe("Failed to call flow listener");
+            expect(second.cause).toBe(error2);
+
+            vi.mocked(console.error).mockClear();
         });
 
         it("should still update the state even if listeners throw", () => {
@@ -849,10 +855,10 @@ describe("ComputedFlow", () => {
 
             expect(flow.getSnapshot()).toBe(0);
 
-            expect(() => {
-                source.emit(1);
-            }).toThrow();
+            source.emit(1);
             expect(flow.getSnapshot()).toBe(1);
+
+            vi.mocked(console.error).mockClear();
         });
 
         it("should call all listeners even if some throw", () => {
@@ -870,32 +876,41 @@ describe("ComputedFlow", () => {
             flow.subscribe(listener2);
             flow.subscribe(listener3);
 
-            expect(() => {
-                source.emit(1);
-            }).toThrow();
+            source.emit(1);
 
             expect(listener1).toHaveBeenCalledTimes(1);
             expect(listener2).toHaveBeenCalledTimes(1);
             expect(listener3).toHaveBeenCalledTimes(1);
+
+            vi.mocked(console.error).mockClear();
         });
 
         it("should handle mixed success and error scenarios", () => {
             const source = createFlow(0);
             const flow = new ComputedFlow(({ watch }) => watch(source));
+            const error = new Error("Test error");
             const successListener = vi.fn();
             const errorListener = vi.fn(() => {
-                throw new Error("Test error");
+                throw error;
             });
 
             flow.subscribe(successListener);
             flow.subscribe(errorListener);
             flow.subscribe(successListener);
 
-            expect(() => {
-                source.emit(1);
-            }).toThrow(AggregateError);
+            source.emit(1);
             expect(successListener).toHaveBeenCalledTimes(2);
             expect(errorListener).toHaveBeenCalledTimes(1);
+
+            expect(console.error).toHaveBeenCalledTimes(1);
+            expect(console.error).toHaveBeenNthCalledWith(1, expect.any(Error));
+
+            const arg = vi.mocked(console.error).mock.calls[0]?.[0] as Error;
+            expect(arg).toBeInstanceOf(Error);
+            expect(arg.message).toBe("Failed to call flow listener");
+            expect(arg.cause).toBe(error);
+
+            vi.mocked(console.error).mockClear();
         });
     });
 

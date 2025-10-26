@@ -850,6 +850,116 @@ describe("AsyncComputedGeneratorFlow", () => {
         });
     });
 
+    describe("subscriptions error handling", () => {
+        it("should catch errors from listeners and log them", () => {
+            const error1 = new Error("Listener 1 error");
+            const error2 = new Error("Listener 2 error");
+
+            const source = createFlow(0);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watch }) {
+                return watch(source);
+            });
+
+            flow.subscribe(() => {
+                throw error1;
+            });
+            flow.subscribe(() => {
+                throw error2;
+            });
+
+            source.emit(1);
+
+            expect(console.error).toHaveBeenCalledTimes(2);
+            expect(console.error).toHaveBeenNthCalledWith(1, expect.any(Error));
+            expect(console.error).toHaveBeenNthCalledWith(2, expect.any(Error));
+
+            const first = vi.mocked(console.error).mock.calls[0]?.[0] as Error;
+            expect(first).toBeInstanceOf(Error);
+            expect(first.message).toBe("Failed to call flow listener");
+            expect(first.cause).toBe(error1);
+
+            const second = vi.mocked(console.error).mock.calls[1]?.[0] as Error;
+            expect(second).toBeInstanceOf(Error);
+            expect(second.message).toBe("Failed to call flow listener");
+            expect(second.cause).toBe(error2);
+
+            vi.mocked(console.error).mockClear();
+        });
+
+        it("should still update the state even if listeners throw", () => {
+            const source = createFlow(0);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watch }) {
+                return watch(source);
+            });
+            flow.subscribe(() => {
+                throw new Error("Listener error");
+            });
+
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 0 });
+
+            source.emit(1);
+            expect(flow.getSnapshot()).toEqual({ status: "success", data: 1 });
+
+            vi.mocked(console.error).mockClear();
+        });
+
+        it("should call all listeners even if some throw", () => {
+            const source = createFlow(0);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watch }) {
+                return watch(source);
+            });
+            const listener1 = vi.fn(() => {
+                throw new Error("Error 1");
+            });
+            const listener2 = vi.fn();
+            const listener3 = vi.fn(() => {
+                throw new Error("Error 3");
+            });
+
+            flow.subscribe(listener1);
+            flow.subscribe(listener2);
+            flow.subscribe(listener3);
+
+            source.emit(1);
+
+            expect(listener1).toHaveBeenCalledTimes(1);
+            expect(listener2).toHaveBeenCalledTimes(1);
+            expect(listener3).toHaveBeenCalledTimes(1);
+
+            vi.mocked(console.error).mockClear();
+        });
+
+        it("should handle mixed success and error scenarios", () => {
+            const source = createFlow(0);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watch }) {
+                return watch(source);
+            });
+            const error = new Error("Test error");
+            const successListener = vi.fn();
+            const errorListener = vi.fn(() => {
+                throw error;
+            });
+
+            flow.subscribe(successListener);
+            flow.subscribe(errorListener);
+            flow.subscribe(successListener);
+
+            source.emit(1);
+
+            expect(successListener).toHaveBeenCalledTimes(2);
+            expect(errorListener).toHaveBeenCalledTimes(1);
+            expect(console.error).toHaveBeenCalledTimes(1);
+            expect(console.error).toHaveBeenNthCalledWith(1, expect.any(Error));
+
+            const arg = vi.mocked(console.error).mock.calls[0]?.[0] as Error;
+            expect(arg).toBeInstanceOf(Error);
+            expect(arg.message).toBe("Failed to call flow listener");
+            expect(arg.cause).toBe(error);
+
+            vi.mocked(console.error).mockClear();
+        });
+    });
+
     describe("skip behavior", () => {
         it("should provide skip() method to abort computation", async () => {
             const source = createAsyncFlow({ status: "success", data: 1 });
