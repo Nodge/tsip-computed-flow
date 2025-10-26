@@ -152,11 +152,6 @@ export class AsyncFlowComputation<T> extends FlowComputationBase<AsyncFlowState<
     protected abortController: AbortController;
 
     /**
-     * Promise resolvers for the computation result, created lazily when needed.
-     */
-    private promise: PromiseWithResolvers<T> | null;
-
-    /**
      * The epoch number for this computation, used for tracking computation generations.
      */
     public readonly epoch: number;
@@ -169,7 +164,6 @@ export class AsyncFlowComputation<T> extends FlowComputationBase<AsyncFlowState<
     public constructor(epoch: number) {
         super();
         this.abortController = new AbortController();
-        this.promise = null;
         this.epoch = epoch;
     }
 
@@ -220,10 +214,6 @@ export class AsyncFlowComputation<T> extends FlowComputationBase<AsyncFlowState<
     public finalize() {
         super.finalize();
         this.abortController.abort();
-
-        if (this.promise) {
-            this.resolvePromise(this.promise);
-        }
     }
 
     /**
@@ -287,45 +277,5 @@ export class AsyncFlowComputation<T> extends FlowComputationBase<AsyncFlowState<
                 return value!.current;
             },
         });
-    }
-
-    /**
-     * Resolves the internal promise with the current computation result.
-     *
-     * @param promise - The promise resolvers to use for resolution
-     */
-    private resolvePromise(promise: PromiseWithResolvers<T>) {
-        if (this.error) {
-            promise.reject(this.error);
-            return;
-        }
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        const value = this.value!.current;
-        switch (value.status) {
-            case "success":
-                promise.resolve(value.data);
-                break;
-            case "error":
-                promise.reject(value.error);
-                break;
-            default:
-                throw new Error("invalid status");
-        }
-    }
-
-    /**
-     * Returns a promise that resolves when the computation completes.
-     *
-     * @returns Promise that resolves to the computation result
-     */
-    public getPromise(): Promise<T> {
-        if (!this.promise) {
-            this.promise = Promise.withResolvers();
-            if (this.finalized) {
-                this.resolvePromise(this.promise);
-            }
-        }
-        return this.promise.promise;
     }
 }

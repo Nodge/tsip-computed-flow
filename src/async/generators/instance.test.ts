@@ -1483,7 +1483,7 @@ describe("AsyncComputedGeneratorFlow", () => {
             await expect(p2).resolves.toBe(6);
         });
 
-        it("should return new promise if sources changed during execution", async () => {
+        it("should return same promise if sources changed during execution", async () => {
             const source = createAsyncFlow({ status: "success", data: 2 });
             const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
                 return (yield* getAsync(source)) * 2;
@@ -1492,8 +1492,8 @@ describe("AsyncComputedGeneratorFlow", () => {
             const p1 = flow.asPromise();
             source.emit({ status: "success", data: 3 });
             const p2 = flow.asPromise();
-            expect(p1).not.toBe(p2);
-            await expect(p1).resolves.toBe(4);
+            expect(p1).toBe(p2);
+            await expect(p1).resolves.toBe(6);
             await expect(p2).resolves.toBe(6);
         });
 
@@ -1520,22 +1520,35 @@ describe("AsyncComputedGeneratorFlow", () => {
             // start first computation (C1)
             source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
+            const promise1 = flow.asPromise();
 
             // start second computation (C2)
             source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
+            const promise2 = flow.asPromise();
+            expect(promise2).toBe(promise1);
 
             // finish first computation
             resolvers[1]?.();
             await nextTick();
             const status = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status).toBe("pending");
+            const promise3 = flow.asPromise();
+            expect(promise3).toBe(promise1);
 
             // finish second computation
             resolvers[2]?.();
             await nextTick();
             const status2 = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status2).toBe(2);
+            const promise4 = flow.asPromise();
+            expect(promise4).toBe(promise1);
+
+            // inspect resolved values
+            await expect(promise1).resolves.toBe(2);
+            await expect(promise2).resolves.toBe(2);
+            await expect(promise3).resolves.toBe(2);
+            await expect(promise4).resolves.toBe(2);
         });
 
         it("should ignore outdated computation (first starts, last ends)", async () => {
@@ -1560,22 +1573,37 @@ describe("AsyncComputedGeneratorFlow", () => {
             // start first computation (C1)
             source.emit(1);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
+            const promise1 = flow.asPromise();
 
             // start second computation (C2)
             source.emit(2);
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: 0 });
+            const promise2 = flow.asPromise();
+            expect(promise2).toBe(promise1);
 
             // finish second computation
             resolvers[2]?.();
             await nextTick();
             const status = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status).toBe(2);
+            const promise3 = flow.asPromise();
+            expect(promise3).toBe(promise1);
+
+            // inspect resolved values
+            await expect(promise1).resolves.toBe(2);
+            await expect(promise2).resolves.toBe(2);
+            await expect(promise3).resolves.toBe(2);
 
             // finish first computation
             resolvers[1]?.();
             await nextTick();
             const status2 = await Promise.race([flow.asPromise(), Promise.resolve("pending")]);
             expect(status2).toBe(2);
+            const promise4 = flow.asPromise();
+            expect(promise4).toBe(promise1);
+
+            // inspect resolved values
+            await expect(promise4).resolves.toBe(2);
         });
     });
 
