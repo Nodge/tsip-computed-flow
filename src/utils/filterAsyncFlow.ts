@@ -1,5 +1,4 @@
-import type { AsyncFlow } from "@tsip/types";
-import type { InferAsyncFlowValue } from "../lib/inferAsyncFlowValue";
+import type { AsyncFlow, InferAsyncFlowValue } from "@tsip/types";
 import { asyncComputedFlow } from "../async/factory";
 
 /**

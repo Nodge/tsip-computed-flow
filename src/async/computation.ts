@@ -1,6 +1,5 @@
-import type { AsyncFlow, AsyncFlowState, Flow } from "@tsip/types";
+import type { AsyncFlow, AsyncFlowState, Flow, InferAsyncFlowValue } from "@tsip/types";
 import { FlowComputationBase } from "../base/computation";
-import type { InferAsyncFlowValue } from "../lib/inferAsyncFlowValue";
 
 /**
  * Context object provided to async flow computation functions.

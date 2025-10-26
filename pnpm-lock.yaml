@@ -21,8 +21,8 @@ importers:
         specifier: 0.2.0
         version: 0.2.0
       '@tsip/types':
-        specifier: 0.3.0
-        version: 0.3.0
+        specifier: 0.4.0
+        version: 0.4.0
       '@types/eslint':
         specifier: 9.6.1
         version: 9.6.1
@@ -530,8 +530,8 @@ packages:
     resolution: {integrity: sha512-B0CbVt7yhNhRr5/NArkasjjwZlCQpmq8xYJNt+XMt7ppOH3PtOiEB5b4/6TyDKvMc33N9WNr4CpENp9cPHbHNg==}
     engines: {node: '>=18'}
 
-  '@tsip/types@0.3.0':
-    resolution: {integrity: sha512-+JCdrTvMVhkovQ5VS9LyEC3VuTF9v57gprRe9HMPLMeZx8Y8UqXkAgBr8QdejaZJtSdHn0L6WnDx/dX/IVa6hw==}
+  '@tsip/types@0.4.0':
+    resolution: {integrity: sha512-YrS+bmxAL/Jnzt2X91Iqbw4s4uElpyG9LfwkQwJPw4Pnq4M4Dw0qmuyKRJxhvIY2JngYYTZehqJ7dhTHTNsaSA==}
     engines: {node: '>=18'}
 
   '@types/chai@5.2.2':
@@ -2159,7 +2159,7 @@ snapshots:
 
   '@tsip/flow@0.2.0': {}
 
-  '@tsip/types@0.3.0': {}
+  '@tsip/types@0.4.0': {}
 
   '@types/chai@5.2.2':
     dependencies:
