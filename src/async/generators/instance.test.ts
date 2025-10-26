@@ -52,15 +52,15 @@ describe("AsyncComputedGeneratorFlow", () => {
 
             const asyncSource = createAsyncFlow({ status: "success", data: 0 });
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const flow8: AsyncFlow<number> = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return yield* getAsync(asyncSource);
+            const flow8: AsyncFlow<number> = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return yield* watchAsync(asyncSource);
             });
         });
 
         it("should infer return type with skips", () => {
             const source = createAsyncFlow<"a" | "b">({ status: "pending" });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync, skip }) {
-                const value = yield* getAsync(source);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync, skip }) {
+                const value = yield* watchAsync(source);
                 if (value === "a") {
                     return skip();
                 }
@@ -108,8 +108,8 @@ describe("AsyncComputedGeneratorFlow", () => {
         it("should compute values based on async dependencies", async () => {
             const source = createAsyncFlow<number>({ status: "pending" });
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return (yield* getAsync(source)) * 2;
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return (yield* watchAsync(source)) * 2;
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
@@ -124,8 +124,8 @@ describe("AsyncComputedGeneratorFlow", () => {
         it("should recompute when dependencies change", async () => {
             const source = createAsyncFlow<number>({ status: "success", data: 2 });
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return (yield* getAsync(source)) * 2;
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return (yield* watchAsync(source)) * 2;
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
@@ -144,8 +144,8 @@ describe("AsyncComputedGeneratorFlow", () => {
 
         it("should initialize with resolved async dependency", async () => {
             const source = createAsyncFlow<string>({ status: "success", data: "result" });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return yield* getAsync(source);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return yield* watchAsync(source);
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
@@ -157,8 +157,8 @@ describe("AsyncComputedGeneratorFlow", () => {
     describe("getSnapshot behavior", () => {
         it("should emit success state when promise resolves", async () => {
             const asyncFlow = createAsyncFlow<string>({ status: "pending" });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return yield* getAsync(asyncFlow);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return yield* watchAsync(asyncFlow);
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
@@ -171,8 +171,8 @@ describe("AsyncComputedGeneratorFlow", () => {
         it("should emit error state when promise rejects", async () => {
             const asyncFlow = createAsyncFlow<string>({ status: "pending" });
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return yield* getAsync(asyncFlow);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return yield* watchAsync(asyncFlow);
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
@@ -187,12 +187,12 @@ describe("AsyncComputedGeneratorFlow", () => {
             const source = createAsyncFlow({ status: "success", data: 1 });
             const asyncFlow = createAsyncFlow<string>({ status: "pending" });
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                const value = yield* getAsync(source);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                const value = yield* watchAsync(source);
                 if (value === 1) {
                     return "initial data";
                 }
-                return yield* getAsync(asyncFlow);
+                return yield* watchAsync(asyncFlow);
             });
 
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: undefined });
@@ -223,12 +223,12 @@ describe("AsyncComputedGeneratorFlow", () => {
             const source = createAsyncFlow({ status: "success", data: 1 });
             const asyncFlow = createAsyncFlow<string>({ status: "pending" });
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                const value = yield* getAsync(source);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                const value = yield* watchAsync(source);
                 if (value === 1) {
                     return "initial data";
                 }
-                return yield* getAsync(asyncFlow);
+                return yield* watchAsync(asyncFlow);
             });
 
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: undefined });
@@ -517,7 +517,7 @@ describe("AsyncComputedGeneratorFlow", () => {
     });
 
     describe("concurrent sources", () => {
-        it("should handle concurrent sources via getAsync.all()", async () => {
+        it("should handle concurrent sources via watchAsync.all()", async () => {
             //  S1
             //  |   S1
             //  |   |   S2
@@ -527,8 +527,8 @@ describe("AsyncComputedGeneratorFlow", () => {
             const s1 = createAsyncFlow<string>({ status: "success", data: "R0" });
             const s2 = createAsyncFlow<string>({ status: "success", data: "R0" });
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return yield* getAsync.all([s1, s2]);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return yield* watchAsync.all([s1, s2]);
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
@@ -564,7 +564,7 @@ describe("AsyncComputedGeneratorFlow", () => {
             expect(flow.getSnapshot()).toEqual({ status: "success", data: ["R2", "R3"] });
         });
 
-        it("should handle concurrent sources via getAsync.allSettled()", async () => {
+        it("should handle concurrent sources via watchAsync.allSettled()", async () => {
             //  S1
             //  |   S1
             //  |   |   S2
@@ -574,8 +574,8 @@ describe("AsyncComputedGeneratorFlow", () => {
             const s1 = createAsyncFlow<string>({ status: "success", data: "R0" });
             const s2 = createAsyncFlow<string>({ status: "success", data: "R0" });
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return yield* getAsync.allSettled([s1, s2]);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return yield* watchAsync.allSettled([s1, s2]);
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
@@ -671,7 +671,7 @@ describe("AsyncComputedGeneratorFlow", () => {
             });
         });
 
-        it("should handle concurrent sources via getAsync.any()", async () => {
+        it("should handle concurrent sources via watchAsync.any()", async () => {
             //  S1
             //  |   S1
             //  |   |   S2
@@ -681,8 +681,8 @@ describe("AsyncComputedGeneratorFlow", () => {
             const s1 = createAsyncFlow<string>({ status: "success", data: "R0" });
             const s2 = createAsyncFlow<string>({ status: "success", data: "R0" });
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return yield* getAsync.any([s1, s2]);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return yield* watchAsync.any([s1, s2]);
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
@@ -718,7 +718,7 @@ describe("AsyncComputedGeneratorFlow", () => {
             expect(flow.getSnapshot()).toEqual({ status: "success", data: "R3" });
         });
 
-        it("should handle concurrent sources via getAsync.race()", async () => {
+        it("should handle concurrent sources via watchAsync.race()", async () => {
             //  S1
             //  |   S1
             //  |   |   S2
@@ -728,8 +728,8 @@ describe("AsyncComputedGeneratorFlow", () => {
             const s1 = createAsyncFlow<string>({ status: "success", data: "R0" });
             const s2 = createAsyncFlow<string>({ status: "success", data: "R0" });
 
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return yield* getAsync.race([s1, s2]);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return yield* watchAsync.race([s1, s2]);
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
@@ -785,8 +785,8 @@ describe("AsyncComputedGeneratorFlow", () => {
         it("should handle promise rejections and propagate errors via getSnapshot", async () => {
             const error = new Error("test");
             const asyncFlow = createAsyncFlow({ status: "error", error });
-            const flow = new AsyncComputedGeneratorFlow<unknown>(function* ({ watchAsync: getAsync }) {
-                yield* getAsync(asyncFlow);
+            const flow = new AsyncComputedGeneratorFlow<unknown>(function* ({ watchAsync }) {
+                yield* watchAsync(asyncFlow);
             });
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
@@ -797,9 +797,9 @@ describe("AsyncComputedGeneratorFlow", () => {
         it("should allow to handle errors via try-catch", async () => {
             const error = new Error("test");
             const asyncFlow = createAsyncFlow({ status: "error", error });
-            const flow = new AsyncComputedGeneratorFlow<unknown>(function* ({ watchAsync: getAsync }) {
+            const flow = new AsyncComputedGeneratorFlow<unknown>(function* ({ watchAsync }) {
                 try {
-                    yield* getAsync(asyncFlow);
+                    yield* watchAsync(asyncFlow);
                 } catch (err) {
                     return { err };
                 }
@@ -829,8 +829,8 @@ describe("AsyncComputedGeneratorFlow", () => {
             const error = new Error("test");
             const source = createAsyncFlow({ status: "error", error });
 
-            const flow = new AsyncComputedGeneratorFlow<unknown>(function* ({ watchAsync: getAsync }) {
-                return yield* getAsync(source);
+            const flow = new AsyncComputedGeneratorFlow<unknown>(function* ({ watchAsync }) {
+                return yield* watchAsync(source);
             });
             flow.subscribe(vi.fn());
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
@@ -963,8 +963,8 @@ describe("AsyncComputedGeneratorFlow", () => {
     describe("skip behavior", () => {
         it("should provide skip() method to abort computation", async () => {
             const source = createAsyncFlow({ status: "success", data: 1 });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync, skip }) {
-                const value = yield* getAsync(source);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync, skip }) {
+                const value = yield* watchAsync(source);
                 if (value % 2 === 0) {
                     skip();
                 }
@@ -1003,8 +1003,8 @@ describe("AsyncComputedGeneratorFlow", () => {
         it("should return initial value if first computation was skipped", async () => {
             const source = createAsyncFlow({ status: "success", data: 0 });
             const flow = new AsyncComputedGeneratorFlow(
-                function* ({ watchAsync: getAsync, skip }) {
-                    const value = yield* getAsync(source);
+                function* ({ watchAsync, skip }) {
+                    const value = yield* watchAsync(source);
                     if (value % 2 === 0) {
                         skip();
                     }
@@ -1038,8 +1038,8 @@ describe("AsyncComputedGeneratorFlow", () => {
         it("should accept different types in getter and initialValue", async () => {
             const source = createAsyncFlow({ status: "success", data: 0 });
             const flow = new AsyncComputedGeneratorFlow<number | "skip">(
-                function* ({ watchAsync: getAsync, skip }) {
-                    const value = yield* getAsync(source);
+                function* ({ watchAsync, skip }) {
+                    const value = yield* watchAsync(source);
                     if (value % 2 === 0) {
                         skip();
                     }
@@ -1072,8 +1072,8 @@ describe("AsyncComputedGeneratorFlow", () => {
 
         it("should throw error if first computation was skipped and initial value was not set", async () => {
             const source = createAsyncFlow({ status: "success", data: 0 });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync, skip }) {
-                const value = yield* getAsync(source);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync, skip }) {
+                const value = yield* watchAsync(source);
                 if (value % 2 === 0) {
                     skip();
                 }
@@ -1166,8 +1166,8 @@ describe("AsyncComputedGeneratorFlow", () => {
     describe("subscription behavior", () => {
         it("should notify subscribers on deps change", async () => {
             const source = createAsyncFlow({ status: "success", data: 1 });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return (yield* getAsync(source)) * 2;
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return (yield* watchAsync(source)) * 2;
             });
             const listener = vi.fn();
 
@@ -1188,8 +1188,8 @@ describe("AsyncComputedGeneratorFlow", () => {
 
         it("should notify subscribers added after the first computation finished", async () => {
             const source = createAsyncFlow({ status: "success", data: 1 });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return (yield* getAsync(source)) * 2;
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return (yield* watchAsync(source)) * 2;
             });
             const listener = vi.fn();
 
@@ -1214,8 +1214,8 @@ describe("AsyncComputedGeneratorFlow", () => {
 
         it("should notify subscribers about computation error", async () => {
             const source = createAsyncFlow({ status: "error", error: new Error() });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                yield* getAsync(source);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                yield* watchAsync(source);
             });
             const listener = vi.fn();
 
@@ -1228,8 +1228,8 @@ describe("AsyncComputedGeneratorFlow", () => {
 
         it("should notify at most once between getSnapshot calls", async () => {
             const source = createAsyncFlow({ status: "success", data: 1 });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return (yield* getAsync(source)) * 2;
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return (yield* watchAsync(source)) * 2;
             });
             const listener = vi.fn();
 
@@ -1504,8 +1504,8 @@ describe("AsyncComputedGeneratorFlow", () => {
     describe("asPromise behavior", () => {
         it("should resolve for success state", async () => {
             const source = createAsyncFlow({ status: "success", data: 2 });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return (yield* getAsync(source)) * 2;
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return (yield* watchAsync(source)) * 2;
             });
 
             const promise = await flow.asPromise();
@@ -1515,8 +1515,8 @@ describe("AsyncComputedGeneratorFlow", () => {
         it("should reject for error state", async () => {
             const error = new Error("test");
             const source = createAsyncFlow<number>({ status: "error", error });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                yield* getAsync(source);
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                yield* watchAsync(source);
             });
 
             const promise = flow.asPromise();
@@ -1550,8 +1550,8 @@ describe("AsyncComputedGeneratorFlow", () => {
 
         it("should return same promise during getter execution", async () => {
             const source = createAsyncFlow({ status: "success", data: 2 });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return (yield* getAsync(source)) * 2;
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return (yield* watchAsync(source)) * 2;
             });
 
             const p1 = flow.asPromise();
@@ -1566,8 +1566,8 @@ describe("AsyncComputedGeneratorFlow", () => {
         it("should return same promise when cached value exists", async () => {
             const value: AsyncFlowState<number> = { status: "success", data: 2 };
             const source = createAsyncFlow(value);
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return (yield* getAsync(source)) * 2;
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return (yield* watchAsync(source)) * 2;
             });
 
             await expect(flow.asPromise()).resolves.toBe(4);
@@ -1580,8 +1580,8 @@ describe("AsyncComputedGeneratorFlow", () => {
 
         it("should return new promise if sources changed", async () => {
             const source = createAsyncFlow({ status: "success", data: 2 });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return (yield* getAsync(source)) * 2;
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return (yield* watchAsync(source)) * 2;
             });
 
             await expect(flow.asPromise()).resolves.toBe(4);
@@ -1595,8 +1595,8 @@ describe("AsyncComputedGeneratorFlow", () => {
 
         it("should return same promise if sources changed during execution", async () => {
             const source = createAsyncFlow({ status: "success", data: 2 });
-            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync: getAsync }) {
-                return (yield* getAsync(source)) * 2;
+            const flow = new AsyncComputedGeneratorFlow(function* ({ watchAsync }) {
+                return (yield* watchAsync(source)) * 2;
             });
 
             const p1 = flow.asPromise();

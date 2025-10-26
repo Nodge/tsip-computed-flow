@@ -1,5 +1,6 @@
 import type { AsyncFlow, AsyncFlowState, Flow } from "@tsip/types";
 import { FlowComputationBase } from "../base/computation";
+import type { InferAsyncFlowValue } from "../lib/inferAsyncFlowValue";
 
 /**
  * Context object provided to async flow computation functions.
@@ -41,7 +42,7 @@ export interface AsyncFlowComputationContext {
          * const userData = await watchAsync(userFlow); // Reads value and creates dependency
          * ```
          */
-        <T>(flow: AsyncFlow<T>): PromiseGenerator<T>;
+        <T extends AsyncFlow<unknown>>(flow: T): PromiseGenerator<InferAsyncFlowValue<T>>;
 
         /**
          * Waits for all async flows to resolve, similar to Promise.all.
@@ -52,7 +53,7 @@ export interface AsyncFlowComputationContext {
          */
         all<T extends readonly AsyncFlow<unknown>[] | []>(
             flows: T,
-        ): PromiseGenerator<{ -readonly [K in keyof T]: AwaitedFlow<T[K]> }>;
+        ): PromiseGenerator<{ -readonly [K in keyof T]: InferAsyncFlowValue<T[K]> }>;
 
         /**
          * Waits for all async flows to settle, similar to Promise.allSettled.
@@ -62,7 +63,7 @@ export interface AsyncFlowComputationContext {
          */
         allSettled<T extends readonly AsyncFlow<unknown>[] | []>(
             flows: T,
-        ): PromiseGenerator<{ -readonly [K in keyof T]: PromiseSettledResult<AwaitedFlow<T[K]>> }>;
+        ): PromiseGenerator<{ -readonly [K in keyof T]: PromiseSettledResult<InferAsyncFlowValue<T[K]>> }>;
 
         /**
          * Waits for any async flow to resolve, similar to Promise.any.
@@ -71,7 +72,7 @@ export interface AsyncFlowComputationContext {
          * @returns Promise generator that resolves to the first successful flow value
          * @throws Will throw if all flows reject
          */
-        any<T extends readonly AsyncFlow<unknown>[] | []>(flows: T): PromiseGenerator<AwaitedFlow<T[number]>>;
+        any<T extends readonly AsyncFlow<unknown>[] | []>(flows: T): PromiseGenerator<InferAsyncFlowValue<T[number]>>;
 
         /**
          * Races async flows against each other, similar to Promise.race.
@@ -79,7 +80,7 @@ export interface AsyncFlowComputationContext {
          * @param flows - Array of async flows to race
          * @returns Promise generator that resolves to the first settled flow value
          */
-        race<T extends readonly AsyncFlow<unknown>[] | []>(flows: T): PromiseGenerator<AwaitedFlow<T[number]>>;
+        race<T extends readonly AsyncFlow<unknown>[] | []>(flows: T): PromiseGenerator<InferAsyncFlowValue<T[number]>>;
     };
 
     /**
@@ -108,11 +109,6 @@ export interface AsyncFlowComputationContext {
      */
     readonly signal: AbortSignal;
 }
-
-/**
- * Utility type that extracts the resolved value type from an AsyncFlow.
- */
-type AwaitedFlow<T> = T extends AsyncFlow<infer U> ? U : never;
 
 /**
  * A Promise that can also be used as an iterable for generator-based async operations.
@@ -173,31 +169,29 @@ export class AsyncFlowComputation<T> extends FlowComputationBase<AsyncFlowState<
      * @returns A context object
      */
     public getContext(): AsyncFlowComputationContext {
-        const watchAsync: AsyncFlowComputationContext["watchAsync"] = (flow) => {
+        const watchAsync: AsyncFlowComputationContext["watchAsync"] = ((flow: AsyncFlow<unknown>) => {
             return this.toIterator(this.readAsyncFlow(flow));
-        };
+        }) as AsyncFlowComputationContext["watchAsync"];
 
-        watchAsync.all = <T extends readonly AsyncFlow<unknown>[] | []>(flows: T) => {
+        watchAsync.all = ((flows) => {
             const promise = Promise.all(flows.map((flow) => this.readAsyncFlow(flow)));
-            return this.toIterator(promise as Promise<{ -readonly [K in keyof T]: AwaitedFlow<T[K]> }>);
-        };
+            return this.toIterator(promise);
+        }) as AsyncFlowComputationContext["watchAsync"]["all"];
 
-        watchAsync.allSettled = <T extends readonly AsyncFlow<unknown>[] | []>(flows: T) => {
+        watchAsync.allSettled = ((flows) => {
             const promise = Promise.allSettled(flows.map((flow) => this.readAsyncFlow(flow)));
-            return this.toIterator(
-                promise as Promise<{ -readonly [K in keyof T]: PromiseSettledResult<AwaitedFlow<T[K]>> }>,
-            );
-        };
+            return this.toIterator(promise);
+        }) as AsyncFlowComputationContext["watchAsync"]["allSettled"];
 
-        watchAsync.any = <T extends readonly AsyncFlow<unknown>[] | []>(flows: T) => {
+        watchAsync.any = ((flows) => {
             const promise = Promise.any(flows.map((flow) => this.readAsyncFlow(flow)));
-            return this.toIterator(promise as Promise<AwaitedFlow<T[number]>>);
-        };
+            return this.toIterator(promise);
+        }) as AsyncFlowComputationContext["watchAsync"]["any"];
 
-        watchAsync.race = <T extends readonly AsyncFlow<unknown>[] | []>(flows: T) => {
+        watchAsync.race = ((flows) => {
             const promise = Promise.race(flows.map((flow) => this.readAsyncFlow(flow)));
-            return this.toIterator(promise as Promise<AwaitedFlow<T[number]>>);
-        };
+            return this.toIterator(promise);
+        }) as AsyncFlowComputationContext["watchAsync"]["race"];
 
         return {
             watch: (flow) => this.readFlow(flow),

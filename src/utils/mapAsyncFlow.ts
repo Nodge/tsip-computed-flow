@@ -1,4 +1,5 @@
 import type { AsyncFlow } from "@tsip/types";
+import type { InferAsyncFlowValue } from "../lib/inferAsyncFlowValue";
 import { asyncComputedFlow } from "../async/factory";
 
 /**
@@ -23,6 +24,9 @@ import { asyncComputedFlow } from "../async/factory";
  * // doubledAsyncFlow.getSnapshot() will be { status: "success", data: 20 } after resolution
  * ```
  */
-export function mapAsyncFlow<T, U>(flow: AsyncFlow<T>, mapper: (value: T) => U): AsyncFlow<U> {
+export function mapAsyncFlow<T extends AsyncFlow<unknown>, U>(
+    flow: T,
+    mapper: (value: InferAsyncFlowValue<T>) => U,
+): AsyncFlow<U> {
     return asyncComputedFlow(async (ctx) => mapper(await ctx.watchAsync(flow)));
 }

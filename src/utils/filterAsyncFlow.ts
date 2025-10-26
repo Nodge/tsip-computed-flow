@@ -1,4 +1,5 @@
 import type { AsyncFlow } from "@tsip/types";
+import type { InferAsyncFlowValue } from "../lib/inferAsyncFlowValue";
 import { asyncComputedFlow } from "../async/factory";
 
 /**
@@ -24,9 +25,18 @@ import { asyncComputedFlow } from "../async/factory";
  * // numberAsyncFlow.getSnapshot() will be { status: "success", data: 42 } and has type AsyncFlow<number>
  * ```
  */
-export function filterAsyncFlow<T, S extends T>(flow: AsyncFlow<T>, predicate: (value: T) => value is S): AsyncFlow<S>;
-export function filterAsyncFlow<T>(flow: AsyncFlow<T>, predicate: (value: T) => unknown): AsyncFlow<T>;
-export function filterAsyncFlow<T>(flow: AsyncFlow<T>, predicate: (value: T) => unknown): AsyncFlow<T> {
+export function filterAsyncFlow<T extends AsyncFlow<unknown>, S extends InferAsyncFlowValue<T>>(
+    flow: T,
+    predicate: (value: InferAsyncFlowValue<T>) => value is S,
+): AsyncFlow<S>;
+export function filterAsyncFlow<T extends AsyncFlow<unknown>>(
+    flow: T,
+    predicate: (value: InferAsyncFlowValue<T>) => unknown,
+): AsyncFlow<InferAsyncFlowValue<T>>;
+export function filterAsyncFlow<T extends AsyncFlow<unknown>>(
+    flow: T,
+    predicate: (value: InferAsyncFlowValue<T>) => unknown,
+): AsyncFlow<InferAsyncFlowValue<T>> {
     return asyncComputedFlow(async (ctx) => {
         const value = await ctx.watchAsync(flow);
         if (!predicate(value)) {

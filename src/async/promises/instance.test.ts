@@ -38,15 +38,15 @@ describe("AsyncComputedPromiseFlow", () => {
 
             const asyncSource = createAsyncFlow({ status: "success", data: 0 });
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const flow8: AsyncFlow<number> = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync }) =>
-                getAsync(asyncSource),
+            const flow8: AsyncFlow<number> = new AsyncComputedPromiseFlow(async ({ watchAsync }) =>
+                watchAsync(asyncSource),
             );
         });
 
         it("should infer return type with skips", () => {
             const source = createAsyncFlow<"a" | "b">({ status: "pending" });
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync, skip }) => {
-                const value = await getAsync(source);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync, skip }) => {
+                const value = await watchAsync(source);
                 if (value === "a") {
                     return skip();
                 }
@@ -78,7 +78,7 @@ describe("AsyncComputedPromiseFlow", () => {
         it("should compute values based on async dependencies", async () => {
             const source = createAsyncFlow<number>({ status: "pending" });
 
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync }) => (await getAsync(source)) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync }) => (await watchAsync(source)) * 2);
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             await nextTick();
@@ -92,7 +92,7 @@ describe("AsyncComputedPromiseFlow", () => {
         it("should recompute when dependencies change", async () => {
             const source = createAsyncFlow<number>({ status: "success", data: 2 });
 
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync }) => (await getAsync(source)) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync }) => (await watchAsync(source)) * 2);
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             await nextTick();
@@ -110,7 +110,7 @@ describe("AsyncComputedPromiseFlow", () => {
 
         it("should initialize with resolved async dependency", async () => {
             const source = createAsyncFlow<string>({ status: "success", data: "result" });
-            const flow = new AsyncComputedPromiseFlow(({ watchAsync: getAsync }) => getAsync(source));
+            const flow = new AsyncComputedPromiseFlow(({ watchAsync }) => watchAsync(source));
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             await nextTick();
@@ -121,7 +121,7 @@ describe("AsyncComputedPromiseFlow", () => {
     describe("getSnapshot behavior", () => {
         it("should emit success state when promise resolves", async () => {
             const asyncFlow = createAsyncFlow<string>({ status: "pending" });
-            const flow = new AsyncComputedPromiseFlow(({ watchAsync: getAsync }) => getAsync(asyncFlow));
+            const flow = new AsyncComputedPromiseFlow(({ watchAsync }) => watchAsync(asyncFlow));
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             asyncFlow.emit({ status: "success", data: "resolved data" });
@@ -133,7 +133,7 @@ describe("AsyncComputedPromiseFlow", () => {
         it("should emit error state when promise rejects", async () => {
             const asyncFlow = createAsyncFlow<string>({ status: "pending" });
 
-            const flow = new AsyncComputedPromiseFlow(({ watchAsync: getAsync }) => getAsync(asyncFlow));
+            const flow = new AsyncComputedPromiseFlow(({ watchAsync }) => watchAsync(asyncFlow));
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
             const error = new Error("test error");
@@ -147,12 +147,12 @@ describe("AsyncComputedPromiseFlow", () => {
             const source = createFlow(1);
             const asyncFlow = createAsyncFlow<string>({ status: "pending" });
 
-            const flow = new AsyncComputedPromiseFlow(async ({ watch, watchAsync: getAsync }) => {
+            const flow = new AsyncComputedPromiseFlow(async ({ watch, watchAsync }) => {
                 const value = watch(source);
                 if (value === 1) {
                     return "initial data";
                 }
-                return getAsync(asyncFlow);
+                return watchAsync(asyncFlow);
             });
 
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: undefined });
@@ -180,12 +180,12 @@ describe("AsyncComputedPromiseFlow", () => {
             const source = createFlow(1);
             const asyncFlow = createAsyncFlow<string>({ status: "pending" });
 
-            const flow = new AsyncComputedPromiseFlow(async ({ watch, watchAsync: getAsync }) => {
+            const flow = new AsyncComputedPromiseFlow(async ({ watch, watchAsync }) => {
                 const value = watch(source);
                 if (value === 1) {
                     return "initial data";
                 }
-                return getAsync(asyncFlow);
+                return watchAsync(asyncFlow);
             });
 
             expect(flow.getSnapshot()).toEqual({ status: "pending", data: undefined });
@@ -483,7 +483,7 @@ describe("AsyncComputedPromiseFlow", () => {
             const s2 = createAsyncFlow<string>({ status: "success", data: "R0" });
 
             const flow = new AsyncComputedPromiseFlow(
-                async ({ watchAsync: getAsync }) => await Promise.all([getAsync(s1), getAsync(s2)]),
+                async ({ watchAsync }) => await Promise.all([watchAsync(s1), watchAsync(s2)]),
             );
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
 
@@ -564,8 +564,8 @@ describe("AsyncComputedPromiseFlow", () => {
             const error = new Error("test");
             const source = createAsyncFlow({ status: "error", error });
 
-            const flow = new AsyncComputedPromiseFlow<unknown>(async ({ watchAsync: getAsync }) => {
-                return getAsync(source);
+            const flow = new AsyncComputedPromiseFlow<unknown>(async ({ watchAsync }) => {
+                return watchAsync(source);
             });
             flow.subscribe(vi.fn());
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
@@ -706,8 +706,8 @@ describe("AsyncComputedPromiseFlow", () => {
     describe("skip behavior", () => {
         it("should provide skip() method to abort computation", async () => {
             const source = createAsyncFlow({ status: "success", data: 1 });
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync, skip }) => {
-                const value = await getAsync(source);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync, skip }) => {
+                const value = await watchAsync(source);
                 if (value % 2 === 0) {
                     skip();
                 }
@@ -746,8 +746,8 @@ describe("AsyncComputedPromiseFlow", () => {
         it("should return initial value if first computation was skipped", async () => {
             const source = createAsyncFlow({ status: "success", data: 0 });
             const flow = new AsyncComputedPromiseFlow(
-                async ({ watchAsync: getAsync, skip }) => {
-                    const value = await getAsync(source);
+                async ({ watchAsync, skip }) => {
+                    const value = await watchAsync(source);
                     if (value % 2 === 0) {
                         skip();
                     }
@@ -781,8 +781,8 @@ describe("AsyncComputedPromiseFlow", () => {
         it("should accept different types in getter and initialValue", async () => {
             const source = createAsyncFlow({ status: "success", data: 0 });
             const flow = new AsyncComputedPromiseFlow<number | "skip">(
-                async ({ watchAsync: getAsync, skip }) => {
-                    const value = await getAsync(source);
+                async ({ watchAsync, skip }) => {
+                    const value = await watchAsync(source);
                     if (value % 2 === 0) {
                         skip();
                     }
@@ -815,8 +815,8 @@ describe("AsyncComputedPromiseFlow", () => {
 
         it("should throw error if first computation was skipped and initial value was not set", async () => {
             const source = createAsyncFlow({ status: "success", data: 0 });
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync, skip }) => {
-                const value = await getAsync(source);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync, skip }) => {
+                const value = await watchAsync(source);
                 if (value % 2 === 0) {
                     skip();
                 }
@@ -933,7 +933,7 @@ describe("AsyncComputedPromiseFlow", () => {
     describe("subscription behavior", () => {
         it("should notify subscribers on deps change", async () => {
             const source = createAsyncFlow({ status: "success", data: 1 });
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync }) => (await getAsync(source)) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync }) => (await watchAsync(source)) * 2);
             const listener = vi.fn();
 
             flow.subscribe(listener);
@@ -953,7 +953,7 @@ describe("AsyncComputedPromiseFlow", () => {
 
         it("should notify subscribers added after the first computation finished", async () => {
             const source = createAsyncFlow({ status: "success", data: 1 });
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync }) => (await getAsync(source)) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync }) => (await watchAsync(source)) * 2);
             const listener = vi.fn();
 
             expect(flow.getSnapshot()).toEqual({ status: "pending" });
@@ -990,7 +990,7 @@ describe("AsyncComputedPromiseFlow", () => {
 
         it("should notify at most once between getSnapshot calls", async () => {
             const source = createAsyncFlow({ status: "success", data: 1 });
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync }) => (await getAsync(source)) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync }) => (await watchAsync(source)) * 2);
             const listener = vi.fn();
 
             flow.subscribe(listener);
@@ -1270,7 +1270,7 @@ describe("AsyncComputedPromiseFlow", () => {
     describe("asPromise behavior", () => {
         it("should resolve for success state", async () => {
             const source = createAsyncFlow({ status: "success", data: 2 });
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync }) => (await getAsync(source)) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync }) => (await watchAsync(source)) * 2);
 
             const promise = await flow.asPromise();
             expect(promise).toBe(4);
@@ -1310,7 +1310,7 @@ describe("AsyncComputedPromiseFlow", () => {
 
         it("should return same promise during getter execution", async () => {
             const source = createAsyncFlow({ status: "success", data: 2 });
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync }) => (await getAsync(source)) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync }) => (await watchAsync(source)) * 2);
 
             const p1 = flow.asPromise();
             const p2 = flow.asPromise();
@@ -1324,7 +1324,7 @@ describe("AsyncComputedPromiseFlow", () => {
         it("should return same promise when cached value exists", async () => {
             const value: AsyncFlowState<number> = { status: "success", data: 2 };
             const source = createAsyncFlow(value);
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync }) => (await getAsync(source)) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync }) => (await watchAsync(source)) * 2);
 
             await expect(flow.asPromise()).resolves.toBe(4);
 
@@ -1336,7 +1336,7 @@ describe("AsyncComputedPromiseFlow", () => {
 
         it("should return new promise if sources changed", async () => {
             const source = createAsyncFlow({ status: "success", data: 2 });
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync }) => (await getAsync(source)) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync }) => (await watchAsync(source)) * 2);
 
             await expect(flow.asPromise()).resolves.toBe(4);
 
@@ -1349,7 +1349,7 @@ describe("AsyncComputedPromiseFlow", () => {
 
         it("should return same promise if sources changed during execution", async () => {
             const source = createAsyncFlow({ status: "success", data: 2 });
-            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync: getAsync }) => (await getAsync(source)) * 2);
+            const flow = new AsyncComputedPromiseFlow(async ({ watchAsync }) => (await watchAsync(source)) * 2);
 
             const p1 = flow.asPromise();
             source.emit({ status: "success", data: 3 });
